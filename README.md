@@ -17,6 +17,12 @@ Swift + SwiftUI, built with Command Line Tools only (no Xcode).
 |---|---|
 | ![Storage](docs/screenshots/storage.png) | ![Settings](docs/screenshots/settings.png) |
 
+## Install
+
+Download the latest `MacGuard-x.y.z.zip` from [Releases](https://github.com/aminerochdi1/MacGuard/releases), unzip it and drag `MacGuard.app` to Applications.
+The app is not notarized by Apple, so the first time: right-click it and choose Open. If macOS still blocks it, run `xattr -dr com.apple.quarantine /Applications/MacGuard.app`.
+Prefer to build it yourself? See Build below. Apple Silicon (M1 to M4), macOS 13 or later.
+
 ## Build
 
 ```bash
@@ -34,7 +40,7 @@ First launch of an ad-hoc signed app: right-click > Open if Gatekeeper complains
 - **History**: CPU, temperature and memory graphs for the last 15 minutes or hour.
 - **Processes**: right-click to Quit or Force Quit; overheating contributors with alerts.
 - **Startup**: LaunchAgents/LaunchDaemons with signature and risk checks.
-- **Security**: suspicious processes and a seven-check crypto miner detector (manual and every 30 minutes).
+- **Security**: suspicious processes and a seven-check crypto miner detector (manual and every 30 minutes). Trust a program to stop it being flagged (manage in Settings).
 - **Battery**: charge, power draw in watts, health and cycles, temperature, apps likely draining it.
 - **Network**: whole-Mac download/upload and per-app usage.
 - **Notch popover**: hover next to the notch for a live mini dashboard (can be turned off in Settings).
@@ -86,6 +92,14 @@ Ground rules:
 - Build with Command Line Tools only (no Xcode project required).
 
 Good first ideas are listed under the `wanted feature` label in Issues.
+
+### Making a release (maintainers)
+```bash
+tools/bump-version.sh 0.6.0      # set the version, then add a "## 0.6" section to CHANGELOG.md
+tools/ship.sh "message"          # commit and push
+tools/release.sh --publish       # build, zip, checksum, create the GitHub release (needs gh)
+```
+`tools/release.sh` on its own only builds the zip in `dist/`.
 
 ## Speed: storage checks
 Storage checks are close to instant in everyday use, noticeably faster than the native macOS storage screen, which can take a long time to calculate and index folders. In hands-on testing on an M2 MacBook (not a formal benchmark) the disk-free figure and the cleanup scan came back almost immediately.

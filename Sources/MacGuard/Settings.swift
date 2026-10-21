@@ -17,6 +17,9 @@ final class Settings: ObservableObject {
     @Published var notifyHeat: Bool { didSet { Self.d.set(notifyHeat, forKey: "notifyHeat"); onChange?() } }
     @Published var notifySuspect: Bool { didSet { Self.d.set(notifySuspect, forKey: "notifySuspect"); onChange?() } }
     @Published var keepInBackground: Bool { didSet { Self.d.set(keepInBackground, forKey: "keepInBackground"); onChange?() } }
+    @Published var allowlist: [String] {
+        didSet { Self.d.set(allowlist, forKey: "allowlist"); Allowlist.paths = Set(allowlist); onChange?() }
+    }
     @Published var notchPopover: Bool { didSet { Self.d.set(notchPopover, forKey: "notchPopover"); onChange?() } }
     @Published var minerAutoCheck: Bool { didSet { Self.d.set(minerAutoCheck, forKey: "minerAutoCheck"); onChange?() } }
     @Published var saveLogs: Bool { didSet { Self.d.set(saveLogs, forKey: "saveLogs"); onChange?() } }
@@ -49,10 +52,20 @@ final class Settings: ObservableObject {
         keepInBackground = Settings.flag("keepInBackground", true)
         minerAutoCheck = Settings.flag("minerAutoCheck", true)
         notchPopover = Settings.flag("notchPopover", true)
+        let saved = d.stringArray(forKey: "allowlist") ?? []
+        allowlist = saved
+        Allowlist.paths = Set(saved)
         saveLogs = Settings.flag("saveLogs", true)
         logPath = d.string(forKey: "logPath") ?? (NSHomeDirectory() + "/Library/Logs/MacGuard")
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
+
+    func trust(_ path: String) {
+        guard !path.isEmpty, !allowlist.contains(path) else { return }
+        allowlist.append(path)
+    }
+
+    func untrust(_ path: String) { allowlist.removeAll { $0 == path } }
 
     var config: Monitor.Config {
         Monitor.Config(tempSensors: tempSensors, alerts: alerts, notifyHeat: notifyHeat,

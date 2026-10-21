@@ -57,8 +57,8 @@ struct ContentView: View {
         case .overview: OverviewView(s: s)
         case .history: HistoryView(s: s)
         case .processes: ProcessesView(s: s)
-        case .startup: StartupView(s: s, monitor: monitor)
-        case .security: SecurityView(s: s, monitor: monitor)
+        case .startup: StartupView(s: s, monitor: monitor, settings: settings)
+        case .security: SecurityView(s: s, monitor: monitor, settings: settings)
         case .storage: StorageView(s: s, monitor: monitor)
         case .network: NetworkView(s: s, monitor: monitor)
         case .battery: BatteryView(s: s)
@@ -108,11 +108,12 @@ struct StatCard: View {
     let detail: String
     var fraction: Double? = nil
     var tint: Color = Theme.ink
+    var valueColor: Color? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.sans(14)).foregroundColor(Theme.slate)
-            Text(value).font(.sans(26, .medium)).monospacedDigit().foregroundColor(Theme.ink).lineLimit(1).minimumScaleFactor(0.7)
+            Text(value).font(.sans(26, .medium)).monospacedDigit().foregroundColor(valueColor ?? Theme.ink).lineLimit(1).minimumScaleFactor(0.7)
             if let f = fraction { Bar(fraction: f, tint: tint) }
             Text(detail).font(.sans(14)).foregroundColor(Theme.slate).lineLimit(2)
         }
@@ -184,11 +185,12 @@ struct OverviewView: View {
         guard let b = s.battery else {
             return StatCard(title: "Battery", value: "No battery", detail: "This Mac runs on power only")
         }
-        let tint: Color = (!b.onAC && b.percent <= 20) ? Theme.high : ((!b.onAC && b.percent <= 40) ? Theme.mid : Theme.ink)
-        var detail = b.stateText
+        let level = BatteryLevel(percent: b.percent)
+        var detail = "\(level.label) · \(b.stateText)"
         if let w = b.watts, abs(w) >= 0.3 { detail += String(format: " · %.1f W", abs(w)) }
         if let h = b.healthPercent { detail += String(format: " · health %.0f%%", h) }
-        return StatCard(title: "Battery", value: "\(b.percent)%", detail: detail, fraction: Double(b.percent) / 100, tint: tint)
+        return StatCard(title: "Battery", value: "\(b.percent)%", detail: detail, fraction: Double(b.percent) / 100,
+                        tint: level.color, valueColor: level.color)
     }
 
     private var networkCard: some View {
@@ -355,6 +357,7 @@ struct ProcessesView: View {
 struct StartupView: View {
     @ObservedObject var s: AppState
     let monitor: Monitor
+    let settings: Settings
 
     var body: some View {
         Page {
@@ -367,7 +370,9 @@ struct StartupView: View {
             }
             VStack(spacing: 0) {
                 ForEach(s.startup) { item in
-                    StartupRow(item: item)
+                    StartupRow(item: item, onTrust: {
+                        TrustActions.confirmAndTrust(path: item.program, name: item.label, settings: settings, state: s, monitor: monitor)
+                    })
                     Divider()
                 }
                 if s.startup.isEmpty {
@@ -383,6 +388,7 @@ struct StartupView: View {
 
 struct StartupRow: View {
     let item: StartupItem
+    let onTrust: () -> Void
 
     private var meta: String {
         var parts = [item.scope, item.signature.rawValue]
@@ -405,8 +411,15 @@ struct StartupRow: View {
                 }
             }
             Spacer()
-            ArrowLink(title: "Show in Finder") {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.id)])
+            VStack(alignment: .trailing, spacing: 6) {
+                if item.trusted {
+                    Text("Trusted").font(.sans(14, .medium)).foregroundColor(Theme.low)
+                } else if item.risk != .low, !item.program.isEmpty {
+                    Button("Trust") { onTrust() }.buttonStyle(PillStyle(kind: .ghost))
+                }
+                ArrowLink(title: "Show in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.id)])
+                }
             }
         }
         .padding(.horizontal, 20)
@@ -419,6 +432,7 @@ struct StartupRow: View {
 struct SecurityView: View {
     @ObservedObject var s: AppState
     let monitor: Monitor
+    let settings: Settings
     @State private var section = 0
 
     var body: some View {
@@ -450,7 +464,7 @@ struct SecurityView: View {
             }
             VStack(spacing: 0) {
                 ForEach(s.suspects) { x in
-                    SuspectRow(x: x, s: s)
+                    SuspectRow(x: x, s: s, settings: settings, monitor: monitor)
                     Divider()
                 }
                 if s.suspects.isEmpty {
@@ -478,6 +492,8 @@ struct SecurityView: View {
 struct SuspectRow: View {
     let x: Suspect
     let s: AppState
+    let settings: Settings
+    let monitor: Monitor
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -497,6 +513,8 @@ struct SuspectRow: View {
                 Button("Quit") { ProcessActions.confirmAndTerminate(pid: x.id, name: x.name, force: false, state: s) }
                     .buttonStyle(PillStyle(kind: .ghost))
                 if !x.path.isEmpty {
+                    Button("Trust") { TrustActions.confirmAndTrust(path: x.path, name: x.name, settings: settings, state: s, monitor: monitor) }
+                        .buttonStyle(PillStyle(kind: .ghost))
                     ArrowLink(title: "Show in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: x.path)])
                     }
@@ -508,6 +526,9 @@ struct SuspectRow: View {
         .contextMenu {
             Button("Quit “\(x.name)”") { ProcessActions.confirmAndTerminate(pid: x.id, name: x.name, force: false, state: s) }
             Button("Force Quit “\(x.name)”") { ProcessActions.confirmAndTerminate(pid: x.id, name: x.name, force: true, state: s) }
+            if !x.path.isEmpty {
+                Button("Trust “\(x.name)”") { TrustActions.confirmAndTrust(path: x.path, name: x.name, settings: settings, state: s, monitor: monitor) }
+            }
         }
     }
 }
@@ -638,6 +659,7 @@ struct SettingsView: View {
             appearance
             sensors
             alerts
+            trustedApps
             notch
             background
             logs
@@ -664,6 +686,27 @@ struct SettingsView: View {
             SettingRow(title: "Read temperature sensors",
                        detail: "Uses the private IOHID sensor API. Off shows only the macOS thermal state and skips sensor reads.",
                        isOn: $settings.tempSensors)
+        }
+        .card(padding: 24)
+    }
+
+    private var trustedApps: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Trusted apps").font(.sans(22, .medium)).tracking(-0.23).foregroundColor(Theme.ink)
+            Text("Programs you trusted from Security or Startup. They are not flagged unless their name or command line matches a known crypto miner.")
+                .font(.sans(14)).foregroundColor(Theme.slate)
+            if settings.allowlist.isEmpty {
+                Text("Nothing trusted yet. Use Trust on a flagged process or startup item.")
+                    .font(.sans(15)).foregroundColor(Theme.slate)
+            }
+            ForEach(settings.allowlist, id: \.self) { path in
+                HStack(spacing: 12) {
+                    Text(path).font(.system(size: 13, design: .monospaced)).foregroundColor(Theme.ink)
+                        .lineLimit(1).truncationMode(.middle)
+                    Spacer()
+                    ArrowLink(title: "Remove") { settings.untrust(path) }
+                }
+            }
         }
         .card(padding: 24)
     }

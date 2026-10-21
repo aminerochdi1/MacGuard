@@ -3,6 +3,9 @@
 All notable changes to MacGuard. Newest first.
 
 ## 0.5
+- **Trusted apps (allowlist)**: a Trust button on flagged processes and startup items (also in the right-click menu). Trusted programs are no longer flagged, unless their name or command line matches a known crypto miner. Review or remove them in Settings > Trusted apps.
+- **Battery colours**: charge is red when low (20% or less), yellow when medium (21 to 50%) and green when high (above 50%), with the word Low / Medium / High next to it. Applies to the Battery tab, Overview and notch popover.
+- **Release builds**: `tools/release.sh` builds, zips and checksums the app into `dist/`; `tools/release.sh --publish` also creates the GitHub release with notes from this changelog. `tools/bump-version.sh 0.6.0` sets the version.
 - **Battery** tab: charge, charging state, time left, battery power in watts, maximum capacity (health) with cycle count, battery temperature, and the apps most likely draining it (estimated from CPU use). Also on the Overview. Desktop Macs show "No battery".
 - **Network** tab: download and upload for the whole Mac, plus per-app rates (from macOS `nettop`, sampled only while the tab is open).
 - **Notch popover**: rest the mouse next to the notch and a small black panel grows out of it with CPU, temperature, memory, battery, network and the top 3 apps. Sized from the real notch and display resolution, so it fits 13/14/15/16 inch MacBooks. Fades instead of growing when Reduce Motion is on. Toggle in Settings > Notch popover. Only on Macs with a notch.

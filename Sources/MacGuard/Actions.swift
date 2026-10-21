@@ -108,3 +108,17 @@ enum LogWriter {
         }
     }
 }
+
+// MARK: - Trust (allowlist)
+
+enum TrustActions {
+    static func confirmAndTrust(path: String, name: String, settings: Settings, state: AppState, monitor: Monitor) {
+        guard !path.isEmpty else { state.notice = "“\(name)” has no known path, so it can’t be trusted."; return }
+        let msg = "MacGuard will stop flagging this program:\n\(path)\n\nIt is still flagged if its name or command line matches a known crypto miner. You can remove it later in Settings > Trusted apps."
+        guard Dialogs.confirm(title: "Trust “\(name)”?", message: msg, button: "Trust") else { return }
+        settings.trust(path)
+        state.suspects.removeAll { $0.path == path }
+        state.notice = "Trusted “\(name)”. Manage trusted apps in Settings."
+        if state.startupScanned { monitor.scanStartup() }
+    }
+}

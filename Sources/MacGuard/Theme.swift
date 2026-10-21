@@ -42,6 +42,9 @@ enum Theme {
     static let mid = dyn(0x9a5b00, 0xffc266)
     static let low = dyn(0x2b7a4b, 0x7fdba0)
 
+    // Battery level: red = low charge, yellow = medium, green = high (always with a text label)
+    static let yellow = dyn(0xa87b00, 0xffd24d)
+
     static func color(_ r: Risk) -> Color {
         switch r { case .high: return high; case .medium: return mid; case .low: return low }
     }

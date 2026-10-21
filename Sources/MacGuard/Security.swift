@@ -109,7 +109,20 @@ struct StartupItem: Identifiable {
     let modified: Date?
     var score: Int
     var reasons: [String]
+    var trusted = false
     var risk: Risk { Risk.from(score) }
+}
+
+// MARK: - Allowlist (programs the user has chosen to trust)
+
+enum Allowlist {
+    private static let lock = NSLock()
+    private static var _paths: Set<String> = []
+    static var paths: Set<String> {
+        get { lock.lock(); defer { lock.unlock() }; return _paths }
+        set { lock.lock(); _paths = newValue; lock.unlock() }
+    }
+    static func contains(_ path: String) -> Bool { !path.isEmpty && paths.contains(path) }
 }
 
 enum StartupScanner {
@@ -149,7 +162,9 @@ enum StartupScanner {
                 case .invalid: score += 3; why.append("Code signature is invalid (modified after signing?)")
                 default: break
                 }
+                var minerHit = false
                 if let t = Heuristics.minerTerm(in: label + " " + args.joined(separator: " ")) {
+                    minerHit = true
                     score += 5; why.append("Matches known miner indicator: \(t)")
                 }
                 if let r = Heuristics.pathRisk(program) { score += r.points; why.append(r.reason) }
@@ -174,9 +189,13 @@ enum StartupScanner {
                     score += 1; why.append("Added or changed in the last 7 days")
                 }
 
+                // Trusted by the user: shown as Low, unless it also matches a known miner indicator
+                let trusted = Allowlist.contains(program) && !minerHit
+                if trusted { score = 0; why = ["Trusted by you (allowlist)"] }
+
                 items.append(StartupItem(id: path, label: label, scope: scope, program: program, arguments: args,
                                          runAtLoad: runAtLoad, keepAlive: keepAlive, signature: status,
-                                         modified: modified, score: score, reasons: why))
+                                         modified: modified, score: score, reasons: why, trusted: trusted))
             }
         }
         return items.sorted { $0.score != $1.score ? $0.score > $1.score : $0.label < $1.label }
@@ -246,6 +265,7 @@ final class Detector {
     /// `deep` reads command lines of every readable process; otherwise only busy or path-flagged ones.
     func evaluate(procs: [ProcInfo], sustained: (Int32) -> Double?, gui: Set<Int32>, deep: Bool) -> [Suspect] {
         let me = getpid()
+        let trusted = Allowlist.paths
         var alive = Set<Int32>()
         var out: [Suspect] = []
 
@@ -254,9 +274,10 @@ final class Detector {
             var score = 0
             var why: [String] = []
             var strong = false   // any signal other than "odd folder" / "unsigned"
+            var minerHit = false
 
             if let t = Heuristics.minerTerm(in: p.name + " " + p.path) {
-                strong = true
+                strong = true; minerHit = true
                 score += 5; why.append("Name or path matches known miner: \(t)")
             }
             let pr = Heuristics.pathRisk(p.path)
@@ -267,7 +288,7 @@ final class Detector {
             }
             if p.readable, deep || p.cpu >= 15 || pr != nil {
                 let a = args(p.id).joined(separator: " ")
-                if let t = Heuristics.minerTerm(in: a) { strong = true; score += 5; why.append("Command line contains: \(t)") }
+                if let t = Heuristics.minerTerm(in: a) { strong = true; minerHit = true; score += 5; why.append("Command line contains: \(t)") }
             }
             if let avg = sustained(p.id), avg >= 80 {
                 strong = true
@@ -275,6 +296,9 @@ final class Detector {
                 if !gui.contains(p.id) { score += 1; why.append("Not a foreground app") }
             }
             if netPids.contains(p.id) { strong = true; score += 2; why.append("Connected to a common mining-pool port") }
+
+            // Trusted by the user: skip unless the name or command line matches a known miner
+            if !p.path.isEmpty, trusted.contains(p.path), !minerHit { continue }
 
             if score > 0, !p.path.isEmpty {
                 let s = sig.check(p.path)

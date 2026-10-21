@@ -218,6 +218,7 @@ struct NotchPopoverView: View {
     private let warn = Color(red: 1.0, green: 0.76, blue: 0.40)
     private let bad = Color(red: 1.0, green: 0.56, blue: 0.53)
     private let good = Color(red: 0.50, green: 0.86, blue: 0.63)
+    private let yellow = Color(red: 1.0, green: 0.82, blue: 0.30)
 
     var body: some View {
         let g = model.geo
@@ -293,8 +294,10 @@ struct NotchPopoverView: View {
 
     @ViewBuilder private func batteryStat(k: CGFloat) -> some View {
         if let b = s.battery {
-            let tint: Color = (!b.onAC && b.percent <= 20) ? bad : ((!b.onAC && b.percent <= 40) ? warn : text)
-            stat("BATTERY", "\(b.percent)%", sub: b.isCharging ? "Charging" : (b.onAC ? "Plugged in" : "On battery"), tint: tint, k: k)
+            let level = BatteryLevel(percent: b.percent)
+            let tint: Color = level == .low ? bad : (level == .mid ? yellow : good)
+            let sub = level.label + (b.isCharging ? " · charging" : (b.onAC ? " · AC" : ""))
+            stat("BATTERY", "\(b.percent)%", sub: sub, tint: tint, k: k)
         } else {
             stat("POWER", "AC", sub: "No battery", tint: text, k: k)
         }

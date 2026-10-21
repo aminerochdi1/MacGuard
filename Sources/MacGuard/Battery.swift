@@ -26,6 +26,14 @@ struct BatteryInfo {
     }
 }
 
+/// Charge level: red = low, yellow = medium, green = high. Always shown with its word, never colour alone.
+enum BatteryLevel {
+    case low, mid, high
+    init(percent: Int) { self = percent <= 20 ? .low : (percent <= 50 ? .mid : .high) }
+    var label: String { switch self { case .low: return "Low"; case .mid: return "Medium"; case .high: return "High" } }
+    var color: Color { switch self { case .low: return Theme.high; case .mid: return Theme.yellow; case .high: return Theme.low } }
+}
+
 // MARK: - Reader (AppleSmartBattery in the IO registry: public IOKit calls, read-only)
 
 enum BatteryReader {
@@ -111,10 +119,11 @@ struct BatteryView: View {
     }
 
     private func chargeCard(_ b: BatteryInfo) -> some View {
-        let tint: Color = (!b.onAC && b.percent <= 20) ? Theme.high : ((!b.onAC && b.percent <= 40) ? Theme.mid : Theme.ink)
-        var detail = b.stateText
+        let level = BatteryLevel(percent: b.percent)
+        var detail = "\(level.label) · \(b.stateText)"
         if let m = b.minutes { detail += b.isCharging ? " · \(fmtMinutes(m)) to full" : " · \(fmtMinutes(m)) left" }
-        return StatCard(title: "Charge", value: "\(b.percent)%", detail: detail, fraction: Double(b.percent) / 100, tint: tint)
+        return StatCard(title: "Charge", value: "\(b.percent)%", detail: detail, fraction: Double(b.percent) / 100,
+                        tint: level.color, valueColor: level.color)
     }
 
     private func powerCard(_ b: BatteryInfo) -> some View {
