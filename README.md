@@ -93,14 +93,6 @@ Ground rules:
 
 Good first ideas are listed under the `wanted feature` label in Issues.
 
-### Making a release (maintainers)
-```bash
-tools/bump-version.sh 0.6.0      # set the version, then add a "## 0.6" section to CHANGELOG.md
-tools/ship.sh "message"          # commit and push
-tools/release.sh --publish       # build, zip, checksum, create the GitHub release (needs gh)
-```
-`tools/release.sh` on its own only builds the zip in `dist/`.
-
 ## Speed: storage checks
 Storage checks are close to instant in everyday use, noticeably faster than the native macOS storage screen, which can take a long time to calculate and index folders. In hands-on testing on an M2 MacBook (not a formal benchmark) the disk-free figure and the cleanup scan came back almost immediately.
 
