@@ -81,6 +81,9 @@ final class Monitor {
     private let netQueue = DispatchQueue(label: "macguard.net", qos: .utility)
     private var netWatchers = 0
     private var netLoopOn = false
+    private var netStore: [Int32: NetApp] = [:]
+    private var netLastActive: [Int32: Date] = [:]
+    private var netLastSample = Date()
     private var heat: [String: Int] = [:]
     private var lastNet = Date.distantPast
     private var notifiedAt: [String: Date] = [:]
@@ -183,6 +186,9 @@ final class Monitor {
             self.netWatchers = max(0, self.netWatchers + (on ? 1 : -1))
             if self.netWatchers > 0, !self.netLoopOn {
                 self.netLoopOn = true
+                self.netStore = [:]          // “this session” starts when the tab is opened
+                self.netLastActive = [:]
+                self.netLastSample = Date()
                 self.netLoop()
             }
         }
@@ -190,12 +196,37 @@ final class Monitor {
 
     private func netLoop() {   // runs on netQueue
         guard netWatchers > 0 else { netLoopOn = false; return }
-        let apps = netAppSampler.sample()
+        let readings = netAppSampler.sample()
+        let now = Date()
+        netLastSample = now
+
+        // Merge: keep apps that went quiet for two minutes, and add up what each one used since the tab was opened
+        var seen = Set<Int32>()
+        for r in readings {
+            seen.insert(r.pid)
+            var e = netStore[r.pid] ?? NetApp(name: r.name, pid: r.pid, down: 0, up: 0, totalDown: 0, totalUp: 0, idle: false)
+            e.down = r.down; e.up = r.up
+            e.totalDown += r.down; e.totalUp += r.up      // each nettop sample is a 1 s delta
+            e.idle = r.down + r.up < 1
+            netStore[r.pid] = e
+            if !e.idle { netLastActive[r.pid] = now }
+            else if netLastActive[r.pid] == nil { netLastActive[r.pid] = now }
+        }
+        for pid in Array(netStore.keys) where !seen.contains(pid) {
+            var e = netStore[pid]!
+            e.down = 0; e.up = 0; e.idle = true
+            netStore[pid] = e
+            let gone = kill(pid, 0) != 0 && errno == ESRCH                     // process has exited
+            if gone || now.timeIntervalSince(netLastActive[pid] ?? now) > 120 {
+                netStore[pid] = nil; netLastActive[pid] = nil
+            }
+        }
+        let apps = Array(netStore.values)
         DispatchQueue.main.async {
             self.state.netApps = apps
             self.state.netAppsReady = true
         }
-        netQueue.asyncAfter(deadline: .now() + 1.0) { self.netLoop() }
+        netQueue.asyncAfter(deadline: .now() + 0.2) { self.netLoop() }
     }
 
     private func step() {

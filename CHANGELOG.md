@@ -3,6 +3,8 @@
 All notable changes to MacGuard. Newest first.
 
 ## 0.7
+- **Network tab, live and per process**: each process using the network gets its own row (with PID), updated every couple of seconds. Apps stay listed for two minutes after they go quiet (shown as idle), and a "This session" column adds up what each used since you opened the tab. Sort by busiest now or most this session.
+- **Quit from the Network tab**: right-click a row for Quit, Force Quit, Show in Finder or Copy PID, or select a row and use the buttons. Core system processes are protected.
 - **About MacGuard**: click the MacGuard title (or MacGuard > About MacGuard in the menu bar) to see who made it, with links to GitHub, issues and releases.
 - **Check for updates**: compares your version with the latest GitHub release and links to the download. It only contacts GitHub when you press the button.
 

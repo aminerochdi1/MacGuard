@@ -1,16 +1,36 @@
 import Foundation
 import Darwin
 import SwiftUI
+import AppKit
 
 // MARK: - Model
 
 struct NetApp: Identifiable {
-    var id: String { name }
+    var id: Int32 { pid }
     let name: String
     let pid: Int32
-    let down: Double   // bytes per second
-    let up: Double
+    var down: Double          // bytes per second right now
+    var up: Double
+    var totalDown: Double     // bytes since the Network tab was opened
+    var totalUp: Double
+    var idle: Bool            // not using the network at the moment (kept in the list for a while)
     var total: Double { down + up }
+    var sessionTotal: Double { totalDown + totalUp }
+}
+
+/// Raw per-process reading from one nettop sample.
+struct NetReading {
+    let name: String
+    let pid: Int32
+    let down: Double
+    let up: Double
+}
+
+/// Path of a running process (nil if it has exited).
+func pidPath(_ pid: Int32) -> String? {
+    var buf = [CChar](repeating: 0, count: 4096)
+    let n = proc_pidpath(pid, &buf, UInt32(buf.count))
+    return n > 0 ? String(cString: buf) : nil
 }
 
 func fmtRate(_ bytesPerSecond: Double) -> String {
@@ -64,15 +84,15 @@ final class NetTotalsSampler {
 
 final class NetAppSampler {
     /// Takes about 1-2 seconds: nettop is asked for two one-second samples and the second (delta) one is used.
-    func sample() -> [NetApp] {
+    func sample() -> [NetReading] {
         guard let out = runTool("/usr/bin/nettop",
                                 ["-P", "-d", "-L", "2", "-s", "1", "-x", "-J", "bytes_in,bytes_out"],
                                 timeout: 8) else { return [] }
         return NetAppSampler.parse(out)
     }
 
-    static func parse(_ text: String) -> [NetApp] {
-        var samples: [[String: (pid: Int32, down: Double, up: Double)]] = []
+    static func parse(_ text: String) -> [NetReading] {
+        var samples: [[Int32: NetReading]] = []
         for raw in text.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
             let line = String(raw)
             if line.contains("bytes_in") { samples.append([:]); continue }
@@ -83,22 +103,15 @@ final class NetAppSampler {
             guard let i = f.firstIndex(where: { isProcessField($0) }) else { continue }
             let nums = f[(i + 1)...].compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
             guard nums.count >= 2 else { continue }
-            let down = nums[0], up = nums[1]
             let field = f[i]
             guard let dot = field.lastIndex(of: "."), let pid = Int32(field[field.index(after: dot)...]) else { continue }
             let name = String(field[..<dot]).trimmingCharacters(in: .whitespaces)
             if name.isEmpty { continue }
-
-            var cur = samples[samples.count - 1]
-            let old = cur[name]
-            cur[name] = (old?.pid ?? pid, (old?.down ?? 0) + down, (old?.up ?? 0) + up)
-            samples[samples.count - 1] = cur
+            samples[samples.count - 1][pid] = NetReading(name: name, pid: pid, down: nums[0], up: nums[1])
         }
-        // Prefer the last sample (a delta); with only one sample the numbers are totals, so show nothing
+        // The last sample is a one-second delta; with only one sample the numbers are totals, so show nothing
         guard samples.count >= 2, let last = samples.last else { return [] }
-        return last.map { NetApp(name: $0.key, pid: $0.value.pid, down: $0.value.down, up: $0.value.up) }
-            .filter { $0.total > 0 }
-            .sorted { $0.total > $1.total }
+        return last.values.filter { $0.down + $0.up > 0 }.sorted { $0.down + $0.up > $1.down + $1.up }
     }
 
     private static func isProcessField(_ s: String) -> Bool {
@@ -114,53 +127,109 @@ final class NetAppSampler {
 struct NetworkView: View {
     @ObservedObject var s: AppState
     let monitor: Monitor
+    @State private var bySession = false
+    @State private var selected: Int32?
+
+    private var rows: [NetApp] {
+        let list = s.netApps.sorted {
+            if bySession { return $0.sessionTotal > $1.sessionTotal }
+            return $0.total != $1.total ? $0.total > $1.total : $0.sessionTotal > $1.sessionTotal
+        }
+        return Array(list.prefix(40))
+    }
+
+    private var selectedApp: NetApp? { s.netApps.first { $0.pid == selected } }
 
     var body: some View {
         Page {
             PageHeader(title: "Network",
-                       subtitle: "Which apps are using the network right now. Updates every few seconds while this tab is open.")
+                       subtitle: "Apps that use the network, updated live. Right-click a row to quit an app. Apps stay listed for two minutes after they go quiet.")
             HStack(alignment: .top, spacing: 16) {
                 StatCard(title: "Download", value: fmtRate(s.netDown), detail: "Whole Mac, Wi-Fi and Ethernet")
                 StatCard(title: "Upload", value: fmtRate(s.netUp), detail: "Whole Mac, Wi-Fi and Ethernet")
             }
+            controls
             appsTable
-            Text("Per-app numbers come from macOS nettop, so they include every process you are allowed to see. Totals come from the network interface counters, so the two can differ slightly.")
+            Text("Per-app numbers come from macOS nettop and refresh every couple of seconds while this tab is open. Totals come from the network interface counters, so the two can differ slightly. “This session” counts since you opened this tab.")
                 .font(.sans(14)).foregroundColor(Theme.slate)
         }
         .onAppear { monitor.netWatch(true) }
         .onDisappear { monitor.netWatch(false) }
     }
 
+    private var controls: some View {
+        HStack(spacing: 8) {
+            Button("Busiest now") { bySession = false }.buttonStyle(PillStyle(kind: bySession ? .ghost : .filled))
+            Button("Most this session") { bySession = true }.buttonStyle(PillStyle(kind: bySession ? .filled : .ghost))
+            Spacer()
+            if let a = selectedApp {
+                Text("\(a.name) selected").font(.sans(14)).foregroundColor(Theme.slate)
+                Button("Quit") { quit(a, force: false) }.buttonStyle(PillStyle(kind: .ghost))
+                Button("Force quit") { quit(a, force: true) }.buttonStyle(PillStyle(kind: .filled))
+            }
+        }
+    }
+
     private var appsTable: some View {
-        let rows = Array(s.netApps.prefix(25))
-        let mx = max(rows.first?.total ?? 1, 1)
+        let list = rows
+        let mx = max(list.map { $0.total }.max() ?? 1, 1)
         return VStack(spacing: 0) {
             HStack {
                 Text("App").frame(maxWidth: .infinity, alignment: .leading)
-                Text("Activity").frame(width: 160, alignment: .leading)
-                Text("Download").frame(width: 110, alignment: .trailing)
-                Text("Upload").frame(width: 110, alignment: .trailing)
+                Text("Activity").frame(width: 140, alignment: .leading)
+                Text("Download").frame(width: 100, alignment: .trailing)
+                Text("Upload").frame(width: 100, alignment: .trailing)
+                Text("This session").frame(width: 110, alignment: .trailing)
             }
             .font(.sans(13, .medium)).foregroundColor(Theme.slate)
             .padding(.horizontal, 20).padding(.vertical, 12)
             Divider()
-            if rows.isEmpty {
+            if list.isEmpty {
                 Text(s.netAppsReady ? "No app is using the network at the moment." : "Measuring… the first result takes about two seconds.")
                     .font(.sans(15)).foregroundColor(Theme.slate).padding(20)
             }
-            ForEach(rows) { a in
-                HStack {
-                    Text(a.name).font(.sans(15)).foregroundColor(Theme.ink).lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Bar(fraction: a.total / mx, tint: Theme.ink).frame(width: 160)
-                    Text(fmtRate(a.down)).monospacedDigit().frame(width: 110, alignment: .trailing)
-                    Text(fmtRate(a.up)).monospacedDigit().frame(width: 110, alignment: .trailing)
-                }
-                .font(.sans(14)).foregroundColor(Theme.ink)
-                .padding(.horizontal, 20).padding(.vertical, 9)
+            ForEach(list) { a in
+                row(a, maxRate: mx)
                 Divider()
             }
         }
         .artifact()
+    }
+
+    private func row(_ a: NetApp, maxRate: Double) -> some View {
+        HStack {
+            HStack(spacing: 8) {
+                Text(a.name).lineLimit(1)
+                Text("PID \(a.pid)").font(.sans(12)).foregroundColor(Theme.slate)
+                if a.idle { Text("idle").font(.sans(12)).foregroundColor(Theme.slate) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Bar(fraction: a.total / maxRate, tint: Theme.ink).frame(width: 140)
+            Text(fmtRate(a.down)).monospacedDigit().frame(width: 100, alignment: .trailing)
+            Text(fmtRate(a.up)).monospacedDigit().frame(width: 100, alignment: .trailing)
+            Text(ByteCountFormatter.string(fromByteCount: Int64(a.sessionTotal), countStyle: .decimal))
+                .monospacedDigit().foregroundColor(Theme.slate).frame(width: 110, alignment: .trailing)
+        }
+        .font(.sans(14)).foregroundColor(a.idle ? Theme.slate : Theme.ink)
+        .padding(.horizontal, 20).padding(.vertical, 9)
+        .background(selected == a.pid ? Theme.mist : Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture { selected = a.pid }
+        .contextMenu {
+            Button("Quit “\(a.name)”") { quit(a, force: false) }
+            Button("Force Quit “\(a.name)”") { quit(a, force: true) }
+            Divider()
+            if let p = pidPath(a.pid) {
+                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)]) }
+            }
+            Button("Copy PID") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(String(a.pid), forType: .string)
+            }
+        }
+    }
+
+    private func quit(_ a: NetApp, force: Bool) {
+        ProcessActions.confirmAndTerminate(pid: a.pid, name: a.name, force: force, state: s)
     }
 }
