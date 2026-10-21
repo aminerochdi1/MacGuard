@@ -17,6 +17,7 @@ final class Settings: ObservableObject {
     @Published var notifyHeat: Bool { didSet { Self.d.set(notifyHeat, forKey: "notifyHeat"); onChange?() } }
     @Published var notifySuspect: Bool { didSet { Self.d.set(notifySuspect, forKey: "notifySuspect"); onChange?() } }
     @Published var keepInBackground: Bool { didSet { Self.d.set(keepInBackground, forKey: "keepInBackground"); onChange?() } }
+    @Published var minerAutoCheck: Bool { didSet { Self.d.set(minerAutoCheck, forKey: "minerAutoCheck"); onChange?() } }
     @Published var saveLogs: Bool { didSet { Self.d.set(saveLogs, forKey: "saveLogs"); onChange?() } }
     @Published var logPath: String { didSet { Self.d.set(logPath, forKey: "logPath"); onChange?() } }
 
@@ -45,6 +46,7 @@ final class Settings: ObservableObject {
         notifyHeat = Settings.flag("notifyHeat", true)
         notifySuspect = Settings.flag("notifySuspect", true)
         keepInBackground = Settings.flag("keepInBackground", true)
+        minerAutoCheck = Settings.flag("minerAutoCheck", true)
         saveLogs = Settings.flag("saveLogs", true)
         logPath = d.string(forKey: "logPath") ?? (NSHomeDirectory() + "/Library/Logs/MacGuard")
         launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -52,7 +54,8 @@ final class Settings: ObservableObject {
 
     var config: Monitor.Config {
         Monitor.Config(tempSensors: tempSensors, alerts: alerts, notifyHeat: notifyHeat,
-                       notifySuspect: notifySuspect, saveLogs: saveLogs, logPath: logPath)
+                       notifySuspect: notifySuspect, saveLogs: saveLogs, logPath: logPath,
+                       minerAutoCheck: minerAutoCheck)
     }
 }
 

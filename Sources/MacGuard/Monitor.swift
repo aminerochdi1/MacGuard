@@ -36,6 +36,9 @@ final class AppState: ObservableObject {
 
     @Published var history: [HistoryPoint] = []
 
+    @Published var minerReport: MinerReport?
+    @Published var minerBusy = false
+
     @Published var bigFiles: [BigFile] = []
     @Published var bigFolders: [FolderSize] = []
     @Published var bigScanning = false
@@ -52,6 +55,7 @@ final class Monitor {
         var notifySuspect = true
         var saveLogs = true
         var logPath = NSHomeDirectory() + "/Library/Logs/MacGuard"
+        var minerAutoCheck = true
     }
 
     private let state: AppState
@@ -68,6 +72,9 @@ final class Monitor {
     private var heat: [String: Int] = [:]
     private var lastNet = Date.distantPast
     private var notifiedAt: [String: Date] = [:]
+    private let notifyLock = NSLock()
+    private var minerRunning = false
+    private var lastMinerCheck = Date()
     private var historyBuf: [HistoryPoint] = []
     private var lastHistory = Date.distantPast
     private var scanner: LargeFileScanner?
@@ -116,9 +123,44 @@ final class Monitor {
 
     /// At most one notification per key per `interval` seconds.
     private func notify(key: String, interval: TimeInterval, title: String, body: String) {
-        if let last = notifiedAt[key], Date().timeIntervalSince(last) < interval { return }
+        notifyLock.lock()
+        if let last = notifiedAt[key], Date().timeIntervalSince(last) < interval { notifyLock.unlock(); return }
         notifiedAt[key] = Date()
+        notifyLock.unlock()
         Notifier.shared.post(id: key, title: title, body: body)
+    }
+
+    // MARK: - Crypto miner check (manual, and automatic every 30 minutes)
+
+    func runMinerCheck(auto: Bool) {
+        if !auto { DispatchQueue.main.async { self.state.minerBusy = true } }
+        work.async {
+            if self.minerRunning { return }
+            self.minerRunning = true
+            defer { self.minerRunning = false }
+
+            let gui = self.foregroundPids()
+            var list: [ProcInfo] = []
+            var sust: [Int32: Double] = [:]
+            var suspects: [Suspect] = []
+            self.queue.sync {
+                list = self.procs.sample()
+                for p in list { if let a = self.procs.sustained(p.id, samples: 4) { sust[p.id] = a } }
+                suspects = self.detector.evaluate(procs: list, sustained: { sust[$0] }, gui: gui, deep: true)
+            }
+            let report = MinerCheck.run(procs: list, sustained: sust, gui: gui, suspects: suspects, sig: self.detector.sig)
+            let c = self.cfg
+            if report.verdict != .clear, c.alerts, c.notifySuspect {
+                let names = report.items.filter { $0.status != .clear }.map { $0.title }.joined(separator: ", ")
+                self.notify(key: "miner-verdict", interval: 6 * 3600,
+                            title: report.verdict == .likely ? "Crypto miner indicators found" : "Possible crypto mining activity",
+                            body: "Flagged by: \(names). Open MacGuard > Security > Crypto miner check.")
+            }
+            DispatchQueue.main.async {
+                self.state.minerReport = report
+                self.state.minerBusy = false
+            }
+        }
     }
 
     private func step() {
@@ -170,6 +212,12 @@ final class Monitor {
         }
         tick += 1
 
+        // Automatic miner check every 30 minutes (first one 30 minutes after launch)
+        if cfg.minerAutoCheck, Date().timeIntervalSince(lastMinerCheck) >= 1800 {
+            lastMinerCheck = Date()
+            runMinerCheck(auto: true)
+        }
+
         let heatList = heat.sorted { $0.value > $1.value }.prefix(5).map { HeatEntry(name: $0.key, count: $0.value) }
         let storage = (tick % 15 == 1) ? Storage.read() : nil
 
@@ -182,7 +230,8 @@ final class Monitor {
         if let c = c, let m = m, Date().timeIntervalSince(lastHistory) >= 10 {
             lastHistory = Date()
             historyBuf.append(HistoryPoint(t: Date(), cpu: c.total, temp: t?.cpuMax,
-                                           mem: Double(m.used) / Double(max(m.total, 1)) * 100))
+                                           mem: Double(m.used) / Double(max(m.total, 1)) * 100,
+                                           pressure: m.pressure))
             if historyBuf.count > 360 { historyBuf.removeFirst(historyBuf.count - 360) }
             historyOut = historyBuf
         }

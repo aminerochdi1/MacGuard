@@ -397,11 +397,27 @@ struct StartupRow: View {
 struct SecurityView: View {
     @ObservedObject var s: AppState
     let monitor: Monitor
+    @State private var section = 0
 
     var body: some View {
         Page {
             PageHeader(title: "Security",
                        subtitle: "Signals, not verdicts: miner names and arguments, sustained high CPU, odd locations, unsigned binaries, mining-pool ports.")
+            HStack(spacing: 8) {
+                Button("Suspicious processes") { section = 0 }.buttonStyle(PillStyle(kind: section == 0 ? .filled : .ghost))
+                Button("Crypto miner check") { section = 1 }.buttonStyle(PillStyle(kind: section == 1 ? .filled : .ghost))
+            }
+            if section == 0 {
+                processesSection
+            } else {
+                MinerCheckView(s: s, monitor: monitor)
+            }
+        }
+        .onAppear { if s.minerReport == nil, !s.minerBusy { monitor.runMinerCheck(auto: false) } }
+    }
+
+    @ViewBuilder private var processesSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 12) {
                 Button("Deep scan now") { monitor.deepScan() }.buttonStyle(PillStyle(kind: .filled)).disabled(s.deepBusy)
                 if s.deepBusy {
@@ -639,6 +655,9 @@ struct SettingsView: View {
             SettingRow(title: "High-risk processes",
                        detail: "Notify when a process reaches High risk (for example miner indicators).",
                        isOn: $settings.notifySuspect).disabled(!settings.alerts)
+            SettingRow(title: "Automatic crypto miner check",
+                       detail: "Runs the seven miner checks every 30 minutes and notifies you if something is found.",
+                       isOn: $settings.minerAutoCheck)
             HStack(spacing: 12) {
                 Button("Send test notification") {
                     Notifier.shared.requestAuthorization()

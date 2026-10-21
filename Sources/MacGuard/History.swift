@@ -7,6 +7,7 @@ struct HistoryPoint {
     let cpu: Double        // % busy, 0-100
     let temp: Double?      // hottest CPU die sensor, °C
     let mem: Double        // % of RAM used (App + Wired + Compressed)
+    let pressure: MemPressure
 }
 
 // MARK: - Minimal line chart (no animation, no dependencies)
@@ -86,18 +87,25 @@ struct HistoryView: View {
                     let hi = max(lo + 30, ((temps.max() ?? 60) + 5).rounded(.up))
                     chart(title: "CPU temperature", unit: " °C", values: pts.map { $0.temp }, minY: lo, maxY: hi, warn: 80, hot: 90, pts: pts)
                 }
-                chart(title: "Memory used", unit: "%", values: pts.map { $0.mem }, minY: 0, maxY: 100, warn: 75, hot: 90, pts: pts)
+                let mems = pts.map { $0.mem }
+                let mlo = max(0, ((mems.min() ?? 0) - 10) / 5).rounded(.down) * 5
+                let press = pts.last?.pressure ?? .normal
+                let ptint: Color = press == .critical ? Theme.high : (press == .warning ? Theme.mid : Theme.low)
+                chart(title: "Memory used", unit: "%", values: mems.map { Optional($0) }, minY: min(mlo, 90), maxY: 100,
+                      warn: 101, hot: 101, pts: pts, tintOverride: ptint,
+                      extra: "Pressure: \(press.rawValue) (the number that matters; 80% used with Normal pressure is healthy)")
             }
         }
     }
 
     private func chart(title: String, unit: String, values: [Double?], minY: Double, maxY: Double,
-                       warn: Double, hot: Double, pts: [HistoryPoint]) -> some View {
+                       warn: Double, hot: Double, pts: [HistoryPoint],
+                       tintOverride: Color? = nil, extra: String? = nil) -> some View {
         let real = values.compactMap { $0 }
         let current = real.last ?? 0
         let peak = real.max() ?? 0
         let avg = real.isEmpty ? 0 : real.reduce(0, +) / Double(real.count)
-        let tint: Color = current >= hot ? Theme.high : (current >= warn ? Theme.mid : Theme.ink)
+        let tint: Color = tintOverride ?? (current >= hot ? Theme.high : (current >= warn ? Theme.mid : Theme.ink))
         let span = pts.first.map { Int(Date().timeIntervalSince($0.t) / 60) } ?? 0
 
         return VStack(alignment: .leading, spacing: 10) {
@@ -109,6 +117,9 @@ struct HistoryView: View {
             }
             LineChart(values: values, minY: minY, maxY: maxY, tint: tint, unit: unit.trimmingCharacters(in: .whitespaces) == "%" ? "%" : "°")
                 .frame(height: 120)
+            if let extra = extra {
+                Text(extra).font(.sans(13)).foregroundColor(Theme.slate)
+            }
             HStack {
                 Text("\(span) min ago").font(.sans(12)).foregroundColor(Theme.slate)
                 Spacer()
