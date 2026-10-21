@@ -45,6 +45,7 @@ First launch of an ad-hoc signed app: right-click > Open if Gatekeeper complains
 - **Network**: whole-Mac download/upload and per-app usage.
 - **Notch popover**: hover next to the notch for a live mini dashboard (can be turned off in Settings).
 - **Storage**: near-instant free-space check, empty caches/Trash, large files finder, logs to a folder you choose.
+- **About**: click the MacGuard title for the author's note and a Check for updates button (compares with the latest GitHub release).
 - **Settings**: theme, sensors, alerts, background running, start at login.
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.

@@ -2,6 +2,10 @@
 
 All notable changes to MacGuard. Newest first.
 
+## 0.7
+- **About MacGuard**: click the MacGuard title (or MacGuard > About MacGuard in the menu bar) to see who made it, with links to GitHub, issues and releases.
+- **Check for updates**: compares your version with the latest GitHub release and links to the download. It only contacts GitHub when you press the button.
+
 ## 0.6
 - **New since last scan**: startup items remember when they were first seen. Anything added since your last scans is marked New for 7 days, shown in a banner on the Startup tab, and notifies you. MacGuard checks every 15 minutes (Settings > Alerts > New startup items). The very first scan only records a baseline.
 - **Startup tab sections**: Launch items, Shell & cron (your shell startup files, `/etc` shell files when something looks wrong, and cron jobs) and Browser extensions (Chrome, Brave, Edge, Vivaldi, Opera, Arc, Firefox).

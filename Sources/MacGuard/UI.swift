@@ -28,7 +28,12 @@ struct ContentView: View {
 
     private var navBar: some View {
         HStack(spacing: 4) {
-            Text("MacGuard").font(.serif(24)).tracking(-0.3).foregroundColor(Theme.ink).padding(.trailing, 16)
+            Button(action: { AboutWindow.shared.show() }) {
+                Text("MacGuard").font(.serif(24)).tracking(-0.3).foregroundColor(Theme.ink)
+            }
+            .buttonStyle(.plain)
+            .help("About MacGuard")
+            .padding(.trailing, 16)
             ForEach(AppTab.allCases) { t in
                 NavItem(title: t.rawValue, selected: tab == t) { tab = t }
             }
