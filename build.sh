@@ -16,8 +16,16 @@ if [ -d Resources/AppIcon.iconset ]; then
     iconutil -c icns Resources/AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
 fi
 
-codesign --force --sign - "$APP"
+# Sign with the stable local identity if it exists (keeps macOS permissions between builds)
+IDENTITY="MacGuard Local Signing"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
+    codesign --force --sign "$IDENTITY" "$APP"
+    echo "Signed with: $IDENTITY"
+else
+    codesign --force --sign - "$APP"
+    echo "Signed ad-hoc. Run tools/setup-signing.sh once for a stable identity."
+fi
 
 echo "Built: $APP"
-echo "Run:   open $APP"
+echo "Run:   ./run.sh   (or: open $APP)"
 echo "Check data accuracy: $APP/Contents/MacOS/MacGuard --selftest"

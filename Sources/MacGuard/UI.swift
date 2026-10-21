@@ -4,7 +4,7 @@ import AppKit
 // Steep-styled, static UI: no animations, every status has a text label (color is never the only signal).
 
 enum AppTab: String, CaseIterable, Identifiable {
-    case overview = "Overview", processes = "Processes", startup = "Startup items"
+    case overview = "Overview", history = "History", processes = "Processes", startup = "Startup"
     case security = "Security", storage = "Storage", settings = "Settings"
     var id: String { rawValue }
 }
@@ -21,7 +21,7 @@ struct ContentView: View {
             if let n = s.notice { noticeBar(n) }
             content
         }
-        .frame(minWidth: 860, minHeight: 560)
+        .frame(minWidth: 960, minHeight: 560)
         .background(Theme.canvas)
         .transaction { $0.animation = nil }
     }
@@ -55,6 +55,7 @@ struct ContentView: View {
     @ViewBuilder private var content: some View {
         switch tab {
         case .overview: OverviewView(s: s)
+        case .history: HistoryView(s: s)
         case .processes: ProcessesView(s: s)
         case .startup: StartupView(s: s, monitor: monitor)
         case .security: SecurityView(s: s, monitor: monitor)
@@ -84,7 +85,7 @@ struct NavItem: View {
     }
 }
 
-private struct Page<Content: View>: View {
+struct Page<Content: View>: View {
     let content: Content
     init(@ViewBuilder _ content: () -> Content) { self.content = content() }
     var body: some View {
@@ -478,11 +479,30 @@ struct SuspectRow: View {
 struct StorageView: View {
     @ObservedObject var s: AppState
     let monitor: Monitor
+    @State private var section = 0
 
     var body: some View {
         Page {
             PageHeader(title: "Storage",
                        subtitle: "Every check is saved to your log file. Emptying caches or the Trash deletes files for good.")
+            HStack(spacing: 8) {
+                Button("Cleanup") { section = 0 }.buttonStyle(PillStyle(kind: section == 0 ? .filled : .ghost))
+                Button("Large files") { section = 1 }.buttonStyle(PillStyle(kind: section == 1 ? .filled : .ghost))
+            }
+            if section == 0 {
+                cleanupSection
+            } else {
+                LargeFilesView(s: s, monitor: monitor)
+            }
+        }
+        .onAppear {
+            // Opening the tab counts as a check: scan (and log) unless one just ran.
+            if !s.cleanupBusy, Date().timeIntervalSince(s.lastScanDate ?? .distantPast) > 60 { monitor.scanCleanup() }
+        }
+    }
+
+    @ViewBuilder private var cleanupSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
             diskCard
             actions
             logLine
@@ -507,10 +527,6 @@ struct StorageView: View {
                 }
             }
             .artifact()
-        }
-        .onAppear {
-            // Opening the tab counts as a check: scan (and log) unless one just ran.
-            if !s.cleanupBusy, Date().timeIntervalSince(s.lastScanDate ?? .distantPast) > 60 { monitor.scanCleanup() }
         }
     }
 

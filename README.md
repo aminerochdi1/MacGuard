@@ -45,3 +45,18 @@ First launch of an ad-hoc signed app: right-click > Open if Gatekeeper complains
 - Every storage check, cache wipe and Trash wipe is appended to `MacGuard-storage.log` in a folder you choose (Settings > Storage logs; default ~/Library/Logs/MacGuard).
 - Settings: theme (System/Light/Dark), temperature sensor toggle, alerts (overheating contributors, high-risk processes), keep running in background, start at login.
 - Icon: `tools/make_icon.py` regenerates `Resources/AppIcon.iconset`; `build.sh` turns it into the .icns.
+
+## New in 0.3
+- **History** tab: CPU, CPU temperature and memory graphs for the last 15 minutes or hour (one reading every 10 s, kept in memory).
+- **Storage > Large files**: scan your home folder (or any folder/drive) for the biggest folders and files, show in Finder, or move to Trash (recoverable). Each scan is written to the storage log.
+- `./run.sh` quits, rebuilds and relaunches. `tools/setup-signing.sh` (run once) creates a stable local signing identity; `build.sh` uses it automatically. `tools/ship.sh "message"` commits and pushes.
+
+## Speed: storage checks
+Storage checks are close to instant in everyday use, noticeably faster than the native macOS storage screen, which can take a long time to calculate and index folders. In hands-on testing on an M2 MacBook (not a formal benchmark) the disk-free figure and the cleanup scan came back almost immediately.
+
+Why it is fast:
+- Free space is read straight from the volume (`URLResourceValues`), with no indexing step.
+- The cleanup scan only measures a few known folders (Caches, Logs, Trash, Xcode DerivedData) and the 8 biggest cache folders.
+- Work runs in the background, so the window never freezes, and the Large files scan can be stopped at any time.
+
+Large files scans walk every file in the chosen folder, so a huge folder or drive still takes longer than the cleanup scan.

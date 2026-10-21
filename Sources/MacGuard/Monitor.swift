@@ -33,6 +33,15 @@ final class AppState: ObservableObject {
     @Published var cleanupScanned = false
     @Published var lastScanDate: Date?
     @Published var lastLogPath: String?
+
+    @Published var history: [HistoryPoint] = []
+
+    @Published var bigFiles: [BigFile] = []
+    @Published var bigFolders: [FolderSize] = []
+    @Published var bigScanning = false
+    @Published var bigScannedCount = 0
+    @Published var bigRoot = ""
+    @Published var bigDone: Date?
 }
 
 final class Monitor {
@@ -59,6 +68,10 @@ final class Monitor {
     private var heat: [String: Int] = [:]
     private var lastNet = Date.distantPast
     private var notifiedAt: [String: Date] = [:]
+    private var historyBuf: [HistoryPoint] = []
+    private var lastHistory = Date.distantPast
+    private var scanner: LargeFileScanner?
+    private let largeQueue = DispatchQueue(label: "macguard.large", qos: .utility)
 
     private let cfgLock = NSLock()
     private var _cfg = Config()
@@ -164,7 +177,18 @@ final class Monitor {
         if let c = c { status = String(format: "CPU %.0f%%", c.total) }
         if let mx = t?.cpuMax { status += String(format: " · %.0f°C", mx) }
 
+        // History: one point every 10 s, last hour kept (360 points)
+        var historyOut: [HistoryPoint]? = nil
+        if let c = c, let m = m, Date().timeIntervalSince(lastHistory) >= 10 {
+            lastHistory = Date()
+            historyBuf.append(HistoryPoint(t: Date(), cpu: c.total, temp: t?.cpuMax,
+                                           mem: Double(m.used) / Double(max(m.total, 1)) * 100))
+            if historyBuf.count > 360 { historyBuf.removeFirst(historyBuf.count - 360) }
+            historyOut = historyBuf
+        }
+
         DispatchQueue.main.async {
+            if let h = historyOut { self.state.history = h }
             if let c = c { self.state.cpu = c }
             if let m = m { self.state.mem = m }
             self.state.temps = t
@@ -247,6 +271,53 @@ final class Monitor {
             if let e = res?.error { self.state.notice = "Couldn’t save the log: \(e)." }
         }
     }
+
+    /// Appends one event to the storage log (if logging is on).
+    func logEvent(title: String, lines: [String]) {
+        let c = cfg
+        guard c.saveLogs else { return }
+        work.async {
+            let res = LogWriter.append(title: title, lines: lines, dir: c.logPath)
+            DispatchQueue.main.async {
+                if let p = res.path { self.state.lastLogPath = p }
+                if let e = res.error { self.state.notice = "Couldn’t save the log: \(e)." }
+            }
+        }
+    }
+
+    // MARK: - Large files
+
+    func scanLarge(root: String) {
+        let sc = LargeFileScanner()
+        scanner = sc
+        DispatchQueue.main.async {
+            self.state.bigScanning = true
+            self.state.bigScannedCount = 0
+            self.state.bigRoot = root
+            self.state.bigFiles = []
+            self.state.bigFolders = []
+        }
+        largeQueue.async {
+            let started = Date()
+            let r = sc.scan(root: URL(fileURLWithPath: root), minBytes: 50_000_000) { n in
+                DispatchQueue.main.async { self.state.bigScannedCount = n }
+            }
+            DispatchQueue.main.async {
+                self.state.bigFiles = r.files
+                self.state.bigFolders = r.folders
+                self.state.bigScannedCount = r.scanned
+                self.state.bigScanning = false
+                self.state.bigDone = Date()
+                if r.wasCancelled { self.state.notice = "Scan stopped. Showing what was found so far." }
+            }
+            var lines = ["Scanned \(r.scanned) files in \(root) (\(Int(Date().timeIntervalSince(started))) s)\(r.wasCancelled ? ", stopped early" : "")"]
+            for f in r.folders.prefix(5) { lines.append("Folder \(f.path): \(fmtBytesFile(f.size))") }
+            for f in r.files.prefix(10) { lines.append("File \(f.path): \(fmtBytesFile(f.size))") }
+            self.logEvent(title: "Large files scan", lines: lines)
+        }
+    }
+
+    func cancelLarge() { scanner?.cancel() }
 
     func scanCleanup() {
         DispatchQueue.main.async { self.state.cleanupBusy = true }
