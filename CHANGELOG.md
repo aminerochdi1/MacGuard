@@ -3,6 +3,7 @@
 All notable changes to MacGuard. Newest first.
 
 ## 0.4
+- **Fewer false alarms**: a validly code-signed app (Chrome, VS Code helpers, etc.) is no longer flagged only because it runs from a temporary folder such as `/private/var/folders`. Unsigned binaries there, or any app with a real miner signal (name, command line, sustained CPU, pool connection), are still flagged.
 - **Security > Crypto miner check**: seven read-only checks and one verdict (Clear / Possible / Likely):
   1. running processes (miner names and command-line arguments, e.g. xmrig, stratum+tcp, --donate-level)
   2. sustained high CPU from non-Apple apps with no window

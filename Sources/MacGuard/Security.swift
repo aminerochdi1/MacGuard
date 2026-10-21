@@ -253,30 +253,37 @@ final class Detector {
             alive.insert(p.id)
             var score = 0
             var why: [String] = []
+            var strong = false   // any signal other than "odd folder" / "unsigned"
 
             if let t = Heuristics.minerTerm(in: p.name + " " + p.path) {
+                strong = true
                 score += 5; why.append("Name or path matches known miner: \(t)")
             }
             let pr = Heuristics.pathRisk(p.path)
             if let pr = pr { score += pr.points; why.append(pr.reason) }
             if Heuristics.masquerades(name: p.name, path: p.path) {
+                strong = true
                 score += 3; why.append("Uses a system process name but is not in a system folder")
             }
             if p.readable, deep || p.cpu >= 15 || pr != nil {
                 let a = args(p.id).joined(separator: " ")
-                if let t = Heuristics.minerTerm(in: a) { score += 5; why.append("Command line contains: \(t)") }
+                if let t = Heuristics.minerTerm(in: a) { strong = true; score += 5; why.append("Command line contains: \(t)") }
             }
             if let avg = sustained(p.id), avg >= 80 {
+                strong = true
                 score += 2; why.append(String(format: "Sustained %.0f%% of one core for ~30 s", avg))
                 if !gui.contains(p.id) { score += 1; why.append("Not a foreground app") }
             }
-            if netPids.contains(p.id) { score += 2; why.append("Connected to a common mining-pool port") }
+            if netPids.contains(p.id) { strong = true; score += 2; why.append("Connected to a common mining-pool port") }
 
             if score > 0, !p.path.isEmpty {
                 let s = sig.check(p.path)
                 if s == .unsigned { score += 2; why.append("Binary is not code-signed") }
                 if s == .invalid { score += 2; why.append("Binary signature is invalid") }
                 if s == .apple, score < 5 { continue }   // genuine Apple binary with only weak signals
+                // Validly signed app (Chrome, VS Code...) whose only signal is its folder: macOS keeps
+                // updated and translocated apps under /private/var/folders, so this is normal.
+                if s == .signed, !strong { continue }
             }
             if score >= 3 {
                 out.append(Suspect(id: p.id, name: p.name, path: p.path, cpu: p.cpu, score: score, reasons: why))

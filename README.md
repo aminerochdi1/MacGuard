@@ -3,6 +3,20 @@
 Lightweight native monitor for Apple Silicon (M1–M4): CPU, RAM, temperature, top processes (right-click to quit), startup items, miner indicators, storage (empty caches/Trash, logs), alerts and settings.
 Swift + SwiftUI, built with Command Line Tools only (no Xcode).
 
+## Screenshots
+
+| Overview | Processes |
+|---|---|
+| ![Overview](docs/screenshots/overview.png) | ![Processes](docs/screenshots/processes.png) |
+
+| History | Security |
+|---|---|
+| ![History](docs/screenshots/history.png) | ![Security](docs/screenshots/security.png) |
+
+| Storage | Settings |
+|---|---|
+| ![Storage](docs/screenshots/storage.png) | ![Settings](docs/screenshots/settings.png) |
+
 ## Build
 
 ```bash
