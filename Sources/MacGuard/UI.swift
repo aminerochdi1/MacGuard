@@ -5,7 +5,7 @@ import AppKit
 
 enum AppTab: String, CaseIterable, Identifiable {
     case overview = "Overview", history = "History", processes = "Processes", startup = "Startup"
-    case security = "Security", storage = "Storage", settings = "Settings"
+    case security = "Security", storage = "Storage", network = "Network", battery = "Battery", settings = "Settings"
     var id: String { rawValue }
 }
 
@@ -21,7 +21,7 @@ struct ContentView: View {
             if let n = s.notice { noticeBar(n) }
             content
         }
-        .frame(minWidth: 960, minHeight: 560)
+        .frame(minWidth: 1100, minHeight: 560)
         .background(Theme.canvas)
         .transaction { $0.animation = nil }
     }
@@ -60,6 +60,8 @@ struct ContentView: View {
         case .startup: StartupView(s: s, monitor: monitor)
         case .security: SecurityView(s: s, monitor: monitor)
         case .storage: StorageView(s: s, monitor: monitor)
+        case .network: NetworkView(s: s, monitor: monitor)
+        case .battery: BatteryView(s: s)
         case .settings: SettingsView(settings: settings, s: s)
         }
     }
@@ -75,7 +77,7 @@ struct NavItem: View {
             Text(title)
                 .font(.sans(15, selected ? .medium : .regular))
                 .foregroundColor(selected ? Theme.onInk : Theme.ink)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 11)
                 .padding(.vertical, 7)
                 .background(Capsule().fill(selected ? Theme.ink : Color.clear))
                 .contentShape(Capsule())
@@ -135,6 +137,10 @@ struct OverviewView: View {
                 topCPU
                 heatCard
             }
+            HStack(alignment: .top, spacing: 16) {
+                batteryCard
+                networkCard
+            }
             sensors
         }
     }
@@ -172,6 +178,22 @@ struct OverviewView: View {
         let tint: Color = used >= 0.9 ? Theme.high : (used >= 0.8 ? Theme.mid : Theme.ink)
         return StatCard(title: "Disk free", value: fmtBytesFile(d.available), detail: "of \(fmtBytesFile(d.total))",
                         fraction: used, tint: tint)
+    }
+
+    private var batteryCard: some View {
+        guard let b = s.battery else {
+            return StatCard(title: "Battery", value: "No battery", detail: "This Mac runs on power only")
+        }
+        let tint: Color = (!b.onAC && b.percent <= 20) ? Theme.high : ((!b.onAC && b.percent <= 40) ? Theme.mid : Theme.ink)
+        var detail = b.stateText
+        if let w = b.watts, abs(w) >= 0.3 { detail += String(format: " · %.1f W", abs(w)) }
+        if let h = b.healthPercent { detail += String(format: " · health %.0f%%", h) }
+        return StatCard(title: "Battery", value: "\(b.percent)%", detail: detail, fraction: Double(b.percent) / 100, tint: tint)
+    }
+
+    private var networkCard: some View {
+        StatCard(title: "Network", value: "↓ \(fmtRate(s.netDown))",
+                 detail: "↑ \(fmtRate(s.netUp)) · open the Network tab to see which apps")
     }
 
     private var topCPU: some View {
@@ -616,6 +638,7 @@ struct SettingsView: View {
             appearance
             sensors
             alerts
+            notch
             background
             logs
         }
@@ -641,6 +664,23 @@ struct SettingsView: View {
             SettingRow(title: "Read temperature sensors",
                        detail: "Uses the private IOHID sensor API. Off shows only the macOS thermal state and skips sensor reads.",
                        isOn: $settings.tempSensors)
+        }
+        .card(padding: 24)
+    }
+
+    private var notch: some View {
+        let geo = NotchGeometry.firstNotched()
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Notch popover").font(.sans(22, .medium)).tracking(-0.23).foregroundColor(Theme.ink)
+            SettingRow(title: "Show the notch popover",
+                       detail: "Rest the mouse next to the notch to open a small panel with CPU, temperature, memory, battery, network and the busiest apps. It moves away when the mouse leaves.",
+                       isOn: $settings.notchPopover).disabled(geo == nil)
+            Text(geo?.summary ?? "No notch found on this Mac, so the popover cannot open here.")
+                .font(.sans(14)).foregroundColor(Theme.slate)
+            if geo != nil {
+                Text("Sizes follow the real notch and your display's \"Looks like\" resolution, so it fits 13, 14, 15 and 16 inch MacBooks. With Reduce Motion on, it fades instead of growing.")
+                    .font(.sans(14)).foregroundColor(Theme.slate)
+            }
         }
         .card(padding: 24)
     }

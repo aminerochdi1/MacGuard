@@ -42,4 +42,14 @@ func runSelfTest() {
     for i in items.prefix(5) where i.risk != .low { print("  [\(i.risk.rawValue)] \(i.label): \(i.reasons.joined(separator: "; "))") }
 
     if let d = Storage.read() { print("Disk free: \(fmtBytesFile(d.available)) of \(fmtBytesFile(d.total))") }
+
+    if let b = BatteryReader.read() {
+        print(String(format: "Battery: %d%% (%@), health %@, cycles %@, power %@ W, temp %@ °C", b.percent, b.stateText,
+                     b.healthPercent.map { String(format: "%.0f%%", $0) } ?? "n/a", b.cycles.map { String($0) } ?? "n/a",
+                     b.watts.map { String(format: "%.1f", $0) } ?? "n/a", b.temperatureC.map { String(format: "%.0f", $0) } ?? "n/a"))
+    } else { print("Battery: none") }
+
+    let apps = NetAppSampler().sample()
+    print("Network (nettop, top 5 by traffic): \(apps.count) active apps")
+    for a in apps.prefix(5) { print("  \(a.name): down \(fmtRate(a.down)), up \(fmtRate(a.up))") }
 }

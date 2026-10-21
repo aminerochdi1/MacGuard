@@ -2,6 +2,12 @@
 
 All notable changes to MacGuard. Newest first.
 
+## 0.5
+- **Battery** tab: charge, charging state, time left, battery power in watts, maximum capacity (health) with cycle count, battery temperature, and the apps most likely draining it (estimated from CPU use). Also on the Overview. Desktop Macs show "No battery".
+- **Network** tab: download and upload for the whole Mac, plus per-app rates (from macOS `nettop`, sampled only while the tab is open).
+- **Notch popover**: rest the mouse next to the notch and a small black panel grows out of it with CPU, temperature, memory, battery, network and the top 3 apps. Sized from the real notch and display resolution, so it fits 13/14/15/16 inch MacBooks. Fades instead of growing when Reduce Motion is on. Toggle in Settings > Notch popover. Only on Macs with a notch.
+- Window is a little wider to fit the two new tabs.
+
 ## 0.4
 - **Fewer false alarms**: a validly code-signed app (Chrome, VS Code helpers, etc.) is no longer flagged only because it runs from a temporary folder such as `/private/var/folders`. Unsigned binaries there, or any app with a real miner signal (name, command line, sustained CPU, pool connection), are still flagged.
 - **Security > Crypto miner check**: seven read-only checks and one verdict (Clear / Possible / Likely):

@@ -36,6 +36,12 @@ final class AppState: ObservableObject {
 
     @Published var history: [HistoryPoint] = []
 
+    @Published var battery: BatteryInfo?
+    @Published var netDown: Double = 0
+    @Published var netUp: Double = 0
+    @Published var netApps: [NetApp] = []
+    @Published var netAppsReady = false
+
     @Published var minerReport: MinerReport?
     @Published var minerBusy = false
 
@@ -69,6 +75,11 @@ final class Monitor {
     private let procs = ProcessSampler()
     private let temps = TempReader()
     private let detector = Detector()
+    private let netTotals = NetTotalsSampler()
+    private let netAppSampler = NetAppSampler()
+    private let netQueue = DispatchQueue(label: "macguard.net", qos: .utility)
+    private var netWatchers = 0
+    private var netLoopOn = false
     private var heat: [String: Int] = [:]
     private var lastNet = Date.distantPast
     private var notifiedAt: [String: Date] = [:]
@@ -163,12 +174,36 @@ final class Monitor {
         }
     }
 
+    // MARK: - Per-app network usage (nettop runs only while the Network tab is open)
+
+    func netWatch(_ on: Bool) {
+        netQueue.async {
+            self.netWatchers = max(0, self.netWatchers + (on ? 1 : -1))
+            if self.netWatchers > 0, !self.netLoopOn {
+                self.netLoopOn = true
+                self.netLoop()
+            }
+        }
+    }
+
+    private func netLoop() {   // runs on netQueue
+        guard netWatchers > 0 else { netLoopOn = false; return }
+        let apps = netAppSampler.sample()
+        DispatchQueue.main.async {
+            self.state.netApps = apps
+            self.state.netAppsReady = true
+        }
+        netQueue.asyncAfter(deadline: .now() + 1.0) { self.netLoop() }
+    }
+
     private func step() {
         let cfg = self.cfg
         let c = cpu.sample()
         let m = readMemory()
         let t = cfg.tempSensors ? temps.read() : nil
         let th = ProcessInfo.processInfo.thermalState
+        let bat = BatteryReader.read()
+        let nt = netTotals.sample()
 
         var newProcs: [ProcInfo]? = nil
         var suspects: [Suspect]? = nil
@@ -240,6 +275,8 @@ final class Monitor {
             if let h = historyOut { self.state.history = h }
             if let c = c { self.state.cpu = c }
             if let m = m { self.state.mem = m }
+            self.state.battery = bat
+            if let n = nt { self.state.netDown = n.down; self.state.netUp = n.up }
             self.state.temps = t
             self.state.tempsEnabled = cfg.tempSensors
             self.state.thermal = thermalStateName(th)

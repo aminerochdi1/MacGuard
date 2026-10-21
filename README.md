@@ -35,6 +35,9 @@ First launch of an ad-hoc signed app: right-click > Open if Gatekeeper complains
 - **Processes**: right-click to Quit or Force Quit; overheating contributors with alerts.
 - **Startup**: LaunchAgents/LaunchDaemons with signature and risk checks.
 - **Security**: suspicious processes and a seven-check crypto miner detector (manual and every 30 minutes).
+- **Battery**: charge, power draw in watts, health and cycles, temperature, apps likely draining it.
+- **Network**: whole-Mac download/upload and per-app usage.
+- **Notch popover**: hover next to the notch for a live mini dashboard (can be turned off in Settings).
 - **Storage**: near-instant free-space check, empty caches/Trash, large files finder, logs to a folder you choose.
 - **Settings**: theme, sensors, alerts, background running, start at login.
 
@@ -48,6 +51,9 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 | Memory | `host_statistics64` | Used = App + Wired + Compressed (Activity Monitor definition); pressure from `kern.memorystatus_vm_pressure_level` |
 | Per-process CPU/RAM | `proc_pid_rusage` | CPU ticks converted with `mach_timebase_info` (125/3 on Apple Silicon). Root/other-user processes fall back to `ps` and are labelled "Estimated" |
 | Temperature | IOHIDEventSystem (private, loaded with dlsym) | Same route as macmon/Stats. Falls back to public `ProcessInfo.thermalState`. No separate motherboard sensor exists on Apple Silicon |
+| Battery | `AppleSmartBattery` in the IO registry (IOKit) | Health = maximum capacity / design capacity; watts = voltage x current |
+| Network | Interface counters (`getifaddrs`) for totals; `nettop` for per-app | Per-app sampling runs only while the Network tab is open |
+| Notch | `NSScreen.safeAreaInsets` and auxiliary top areas | Real notch size in points, so it adapts to every MacBook and display setting |
 | Startup items | LaunchAgents/LaunchDaemons plists + in-process code-signature check | `sfltool dumpbtm` needs root, so not used |
 | Miner indicators | Names/arguments, sustained CPU, odd paths, unsigned binary, pool ports (`lsof`) | Signals, not verdicts |
 | Storage | `URLResourceValues` | Read-only; never deletes |

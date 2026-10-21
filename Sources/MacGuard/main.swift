@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let state = AppState()
     let settings = Settings()
     var monitor: Monitor!
+    var notch: NotchController!
     var window: NSWindow!
     var statusItem: NSStatusItem!
     var bag = Set<AnyCancellable>()
@@ -22,7 +23,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self = self else { return }
             self.monitor.updateConfig(self.settings.config)
             self.applyTheme()
+            self.notch.setEnabled(self.settings.notchPopover)
         }
+        notch = NotchController(state: state)
+        notch.setEnabled(settings.notchPopover)
         applyTheme()
 
         Notifier.shared.setup()
@@ -30,7 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         buildMenu()
 
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1120, height: 720),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
         window.title = "MacGuard"

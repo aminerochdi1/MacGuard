@@ -17,6 +17,7 @@ final class Settings: ObservableObject {
     @Published var notifyHeat: Bool { didSet { Self.d.set(notifyHeat, forKey: "notifyHeat"); onChange?() } }
     @Published var notifySuspect: Bool { didSet { Self.d.set(notifySuspect, forKey: "notifySuspect"); onChange?() } }
     @Published var keepInBackground: Bool { didSet { Self.d.set(keepInBackground, forKey: "keepInBackground"); onChange?() } }
+    @Published var notchPopover: Bool { didSet { Self.d.set(notchPopover, forKey: "notchPopover"); onChange?() } }
     @Published var minerAutoCheck: Bool { didSet { Self.d.set(minerAutoCheck, forKey: "minerAutoCheck"); onChange?() } }
     @Published var saveLogs: Bool { didSet { Self.d.set(saveLogs, forKey: "saveLogs"); onChange?() } }
     @Published var logPath: String { didSet { Self.d.set(logPath, forKey: "logPath"); onChange?() } }
@@ -47,6 +48,7 @@ final class Settings: ObservableObject {
         notifySuspect = Settings.flag("notifySuspect", true)
         keepInBackground = Settings.flag("keepInBackground", true)
         minerAutoCheck = Settings.flag("minerAutoCheck", true)
+        notchPopover = Settings.flag("notchPopover", true)
         saveLogs = Settings.flag("saveLogs", true)
         logPath = d.string(forKey: "logPath") ?? (NSHomeDirectory() + "/Library/Logs/MacGuard")
         launchAtLogin = SMAppService.mainApp.status == .enabled
