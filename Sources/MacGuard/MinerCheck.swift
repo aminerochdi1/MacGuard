@@ -65,7 +65,8 @@ enum MinerCheck {
             persistenceCheck(sig),
             scheduledCheck(),
             fileCheck(),
-            browserCheck(procs, sustained)
+            browserCheck(procs, sustained),
+            extensionCheck()
         ]
         return MinerReport(items: items, date: Date(), duration: Date().timeIntervalSince(start))
     }
@@ -110,7 +111,7 @@ enum MinerCheck {
 
     // 4. LaunchAgents / LaunchDaemons
     private static func persistenceCheck(_ sig: SignatureChecker) -> MinerCheckItem {
-        let items = StartupScanner.scan(sig: sig)
+        let items = StartupScanner.scan(sig: sig) + PersistenceScanner.appInjection(sig: sig)
         var found: [String] = []
         var warn: [String] = []
         for i in items {
@@ -121,7 +122,7 @@ enum MinerCheck {
             }
         }
         return MinerCheckItem(id: "persist", title: "Startup persistence",
-                              summary: "LaunchAgents and LaunchDaemons that start miners or look suspicious.",
+                              summary: "LaunchAgents, LaunchDaemons and library injection that start miners or look suspicious.",
                               status: found.isEmpty ? (warn.isEmpty ? .clear : .warning) : .found,
                               details: found + warn)
     }
@@ -205,6 +206,19 @@ enum MinerCheck {
     }
 
     // 7. Browser tabs that may be mining
+    // 8. Browser extensions: a mining extension is the other common way browsers get used for mining
+    private static func extensionCheck() -> MinerCheckItem {
+        let exts = PersistenceScanner.browserExtensions()
+        var found: [String] = []
+        for e in exts where e.reasons.contains(where: { $0.hasPrefix("Matches known miner indicator") }) {
+            found.append("\(e.label) (\(e.scope)): \(e.reasons.first ?? "")")
+        }
+        return MinerCheckItem(id: "ext", title: "Browser extensions",
+                              summary: "Chrome, Brave, Edge, Vivaldi, Opera, Arc and Firefox extensions that match known miner names. Safari extensions are not covered.",
+                              status: found.isEmpty ? .clear : .found,
+                              details: found.isEmpty ? ["\(exts.count) extensions checked."] : found)
+    }
+
     private static func browserCheck(_ procs: [ProcInfo], _ sustained: [Int32: Double]) -> MinerCheckItem {
         var details: [String] = []
         for p in procs {
@@ -283,7 +297,7 @@ struct MinerCheckView: View {
                     .font(.sans(14)).foregroundColor(Theme.slate)
             } else {
                 Text(s.minerBusy ? "Checking…" : "Not run yet").font(.serif(30)).tracking(-0.4).foregroundColor(Theme.ink)
-                Text("Seven read-only checks: processes, CPU, network, startup items, scheduled jobs, files and browser tabs.")
+                Text("Eight read-only checks: processes, CPU, network, startup items, scheduled jobs, files, browser tabs and browser extensions.")
                     .font(.sans(14)).foregroundColor(Theme.slate)
             }
         }

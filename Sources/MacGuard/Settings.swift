@@ -20,6 +20,7 @@ final class Settings: ObservableObject {
     @Published var allowlist: [String] {
         didSet { Self.d.set(allowlist, forKey: "allowlist"); Allowlist.paths = Set(allowlist); onChange?() }
     }
+    @Published var notifyNewStartup: Bool { didSet { Self.d.set(notifyNewStartup, forKey: "notifyNewStartup"); onChange?() } }
     @Published var notchPopover: Bool { didSet { Self.d.set(notchPopover, forKey: "notchPopover"); onChange?() } }
     @Published var minerAutoCheck: Bool { didSet { Self.d.set(minerAutoCheck, forKey: "minerAutoCheck"); onChange?() } }
     @Published var saveLogs: Bool { didSet { Self.d.set(saveLogs, forKey: "saveLogs"); onChange?() } }
@@ -52,6 +53,7 @@ final class Settings: ObservableObject {
         keepInBackground = Settings.flag("keepInBackground", true)
         minerAutoCheck = Settings.flag("minerAutoCheck", true)
         notchPopover = Settings.flag("notchPopover", true)
+        notifyNewStartup = Settings.flag("notifyNewStartup", true)
         let saved = d.stringArray(forKey: "allowlist") ?? []
         allowlist = saved
         Allowlist.paths = Set(saved)
@@ -70,7 +72,7 @@ final class Settings: ObservableObject {
     var config: Monitor.Config {
         Monitor.Config(tempSensors: tempSensors, alerts: alerts, notifyHeat: notifyHeat,
                        notifySuspect: notifySuspect, saveLogs: saveLogs, logPath: logPath,
-                       minerAutoCheck: minerAutoCheck)
+                       minerAutoCheck: minerAutoCheck, notifyNewStartup: notifyNewStartup)
     }
 }
 

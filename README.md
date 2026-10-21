@@ -39,8 +39,8 @@ First launch of an ad-hoc signed app: right-click > Open if Gatekeeper complains
 - **Overview**: CPU, memory (with pressure), temperatures, disk, hottest processes.
 - **History**: CPU, temperature and memory graphs for the last 15 minutes or hour.
 - **Processes**: right-click to Quit or Force Quit; overheating contributors with alerts.
-- **Startup**: LaunchAgents/LaunchDaemons with signature and risk checks.
-- **Security**: suspicious processes and a seven-check crypto miner detector (manual and every 30 minutes). Trust a program to stop it being flagged (manage in Settings).
+- **Startup**: LaunchAgents/LaunchDaemons, shell startup files, cron jobs and browser extensions, with signature, notarization and risk checks. Items added since your last scan are marked New, and you get a notification (every 15 minutes check, can be turned off).
+- **Security**: suspicious processes and an eight-check crypto miner detector (manual and every 30 minutes). Trust a program to stop it being flagged (manage in Settings).
 - **Battery**: charge, power draw in watts, health and cycles, temperature, apps likely draining it.
 - **Network**: whole-Mac download/upload and per-app usage.
 - **Notch popover**: hover next to the notch for a live mini dashboard (can be turned off in Settings).
@@ -60,6 +60,7 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 | Battery | `AppleSmartBattery` in the IO registry (IOKit) | Health = maximum capacity / design capacity; watts = voltage x current |
 | Network | Interface counters (`getifaddrs`) for totals; `nettop` for per-app | Per-app sampling runs only while the Network tab is open |
 | Notch | `NSScreen.safeAreaInsets` and auxiliary top areas | Real notch size in points, so it adapts to every MacBook and display setting |
+| Shell files, cron, extensions | Plain files (`~/.zshrc`, `/etc/zshrc`...), `crontab -l`, browser extension folders and manifests | Chrome, Brave, Edge, Vivaldi, Opera, Arc and Firefox. Safari extensions are not covered |
 | Startup items | LaunchAgents/LaunchDaemons plists + in-process code-signature check | `sfltool dumpbtm` needs root, so not used |
 | Miner indicators | Names/arguments, sustained CPU, odd paths, unsigned binary, pool ports (`lsof`) | Signals, not verdicts |
 | Storage | `URLResourceValues` | Read-only; never deletes |
@@ -74,6 +75,7 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 - Temperature sensor names differ per chip; `--selftest` and the Overview "All temperature sensors" list show what your Mac exposes.
 - Trash/Library scans may need Full Disk Access to report full sizes.
 - Complements, not replaces, Objective-See's KnockKnock / BlockBlock / LuLu.
+- Login Items (System Settings) and Safari extensions are not listed: macOS gives normal apps no clean way to read them.
 
 ## Contributing
 
@@ -92,6 +94,10 @@ Ground rules:
 - Build with Command Line Tools only (no Xcode project required).
 
 Good first ideas are listed under the `wanted feature` label in Issues.
+
+## Acknowledgements
+
+MacGuard was inspired by [KnockKnock](https://github.com/objective-see/KnockKnock) from Objective-See (GPL-3.0), which taught me which places malware uses to stay on a Mac: launch items, shell files, cron, browser extensions, library injection and the notarization check. MacGuard is written independently in Swift and does not contain KnockKnock's code. For deep persistence scanning with VirusTotal lookups, use KnockKnock itself, and check out Objective-See's other free tools (BlockBlock, LuLu).
 
 ## Speed: storage checks
 Storage checks are close to instant in everyday use, noticeably faster than the native macOS storage screen, which can take a long time to calculate and index folders. In hands-on testing on an M2 MacBook (not a formal benchmark) the disk-free figure and the cleanup scan came back almost immediately.

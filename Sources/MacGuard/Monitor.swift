@@ -62,6 +62,7 @@ final class Monitor {
         var saveLogs = true
         var logPath = NSHomeDirectory() + "/Library/Logs/MacGuard"
         var minerAutoCheck = true
+        var notifyNewStartup = true
     }
 
     private let state: AppState
@@ -86,6 +87,7 @@ final class Monitor {
     private let notifyLock = NSLock()
     private var minerRunning = false
     private var lastMinerCheck = Date()
+    private var lastStartupCheck = Date().addingTimeInterval(-900 + 20)   // first automatic scan ~20 s after launch
     private var historyBuf: [HistoryPoint] = []
     private var lastHistory = Date.distantPast
     private var scanner: LargeFileScanner?
@@ -253,6 +255,15 @@ final class Monitor {
             runMinerCheck(auto: true)
         }
 
+        // Automatic check for new startup items every 15 minutes
+        if cfg.alerts, cfg.notifyNewStartup, Date().timeIntervalSince(lastStartupCheck) >= 900 {
+            lastStartupCheck = Date()
+            work.async {
+                let items = self.runStartupScan()
+                DispatchQueue.main.async { if self.state.startupScanned { self.state.startup = items } }
+            }
+        }
+
         let heatList = heat.sorted { $0.value > $1.value }.prefix(5).map { HeatEntry(name: $0.key, count: $0.value) }
         let storage = (tick % 15 == 1) ? Storage.read() : nil
 
@@ -292,10 +303,28 @@ final class Monitor {
 
     // MARK: - On-demand scans
 
+    /// Full startup scan (runs on `work`): marks items that are new since the last scan and notifies about them.
+    private func runStartupScan() -> [StartupItem] {
+        let r = StartupFullScan.run(sig: detector.sig)
+        let c = cfg
+        if c.alerts, c.notifyNewStartup, !r.fresh.isEmpty {
+            if r.fresh.count > 3 {
+                notify(key: "startup-new-batch", interval: 3600, title: "New startup items",
+                       body: "\(r.fresh.count) new items were added (for example \(r.fresh[0].label)). Open MacGuard > Startup.")
+            } else {
+                for i in r.fresh {
+                    notify(key: "startup-new-\(i.id)", interval: 24 * 3600, title: "New startup item",
+                           body: "\(i.label) (\(i.scope)) was added. Risk: \(i.risk.rawValue). Open MacGuard > Startup.")
+                }
+            }
+        }
+        return r.items
+    }
+
     func scanStartup() {
         DispatchQueue.main.async { self.state.startupBusy = true }
         work.async {
-            let items = StartupScanner.scan(sig: self.detector.sig)
+            let items = self.runStartupScan()
             DispatchQueue.main.async {
                 self.state.startup = items
                 self.state.startupScanned = true
@@ -309,7 +338,7 @@ final class Monitor {
         DispatchQueue.main.async { self.state.deepBusy = true }
         work.async {
             let net = NetScanner.scan()
-            let items = StartupScanner.scan(sig: self.detector.sig)
+            let items = self.runStartupScan()
             let gui = self.foregroundPids()
             self.queue.sync {
                 self.detector.netPids = Set(net.map { $0.pid })

@@ -2,6 +2,14 @@
 
 All notable changes to MacGuard. Newest first.
 
+## 0.6
+- **New since last scan**: startup items remember when they were first seen. Anything added since your last scans is marked New for 7 days, shown in a banner on the Startup tab, and notifies you. MacGuard checks every 15 minutes (Settings > Alerts > New startup items). The very first scan only records a baseline.
+- **Startup tab sections**: Launch items, Shell & cron (your shell startup files, `/etc` shell files when something looks wrong, and cron jobs) and Browser extensions (Chrome, Brave, Edge, Vivaldi, Opera, Arc, Firefox).
+- **Library injection**: flags `DYLD_INSERT_LIBRARIES` in LaunchAgent/Daemon plists and in installed apps (`LSEnvironment`).
+- **Notarization**: code signatures now show "Notarized" for Developer ID apps Apple has notarized.
+- **Crypto miner check** now has eight checks: the new one looks for miner names in browser extensions.
+- Inspired by Objective-See's KnockKnock (no code copied); see the README acknowledgements.
+
 ## 0.5
 - **Trusted apps (allowlist)**: a Trust button on flagged processes and startup items (also in the right-click menu). Trusted programs are no longer flagged, unless their name or command line matches a known crypto miner. Review or remove them in Settings > Trusted apps.
 - **Battery colours**: charge is red when low (20% or less), yellow when medium (21 to 50%) and green when high (above 50%), with the word Low / Medium / High next to it. Applies to the Battery tab, Overview and notch popover.
@@ -13,7 +21,7 @@ All notable changes to MacGuard. Newest first.
 
 ## 0.4
 - **Fewer false alarms**: a validly code-signed app (Chrome, VS Code helpers, etc.) is no longer flagged only because it runs from a temporary folder such as `/private/var/folders`. Unsigned binaries there, or any app with a real miner signal (name, command line, sustained CPU, pool connection), are still flagged.
-- **Security > Crypto miner check**: seven read-only checks and one verdict (Clear / Possible / Likely):
+- **Security > Crypto miner check**: seven read-only checks (eight since 0.6) and one verdict (Clear / Possible / Likely):
   1. running processes (miner names and command-line arguments, e.g. xmrig, stratum+tcp, --donate-level)
   2. sustained high CPU from non-Apple apps with no window
   3. connections to common mining-pool ports (your own processes)

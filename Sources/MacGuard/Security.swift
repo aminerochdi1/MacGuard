@@ -50,10 +50,12 @@ enum Heuristics {
 
 enum SigStatus: String {
     case apple = "Apple"
+    case notarized = "Notarized"
     case signed = "Signed"
     case unsigned = "Unsigned"
     case invalid = "Invalid"
     case missing = "Missing"
+    case notApplicable = "n/a"
 }
 
 final class SignatureChecker {
@@ -84,6 +86,12 @@ final class SignatureChecker {
            SecStaticCodeCheckValidity(code, flags, req) == errSecSuccess {
             return .apple
         }
+        // Developer ID code that Apple has notarized
+        var nreq: SecRequirement?
+        if SecRequirementCreateWithString("notarized" as CFString, [], &nreq) == errSecSuccess, let nreq = nreq,
+           SecStaticCodeCheckValidity(code, flags, nreq) == errSecSuccess {
+            return .notarized
+        }
         return .signed
     }
 }
@@ -110,7 +118,16 @@ struct StartupItem: Identifiable {
     var score: Int
     var reasons: [String]
     var trusted = false
+    var category: StartupCategory = .launch
+    var isNew = false
+    var firstSeen: Date? = nil
     var risk: Risk { Risk.from(score) }
+
+    /// File to show in Finder (nil for cron lines).
+    var revealPath: String? {
+        if id.hasPrefix("crontab:") { return nil }
+        return id.split(separator: "#", maxSplits: 1).first.map(String.init)
+    }
 }
 
 // MARK: - Allowlist (programs the user has chosen to trust)
@@ -161,6 +178,10 @@ enum StartupScanner {
                 case .unsigned: score += 2; why.append("Executable is not code-signed")
                 case .invalid: score += 3; why.append("Code signature is invalid (modified after signing?)")
                 default: break
+                }
+                if let env = obj["EnvironmentVariables"] as? [String: Any],
+                   let libs = (env["DYLD_INSERT_LIBRARIES"] as? String) ?? (env["__XPC_DYLD_INSERT_LIBRARIES"] as? String), !libs.isEmpty {
+                    score += 4; why.append("Injects a library into its process (DYLD_INSERT_LIBRARIES): \(libs.prefix(90))")
                 }
                 var minerHit = false
                 if let t = Heuristics.minerTerm(in: label + " " + args.joined(separator: " ")) {
@@ -307,7 +328,7 @@ final class Detector {
                 if s == .apple, score < 5 { continue }   // genuine Apple binary with only weak signals
                 // Validly signed app (Chrome, VS Code...) whose only signal is its folder: macOS keeps
                 // updated and translocated apps under /private/var/folders, so this is normal.
-                if s == .signed, !strong { continue }
+                if s == .signed || s == .notarized, !strong { continue }
             }
             if score >= 3 {
                 out.append(Suspect(id: p.id, name: p.name, path: p.path, cpu: p.cpu, score: score, reasons: why))

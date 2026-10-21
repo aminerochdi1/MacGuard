@@ -358,31 +358,70 @@ struct StartupView: View {
     @ObservedObject var s: AppState
     let monitor: Monitor
     let settings: Settings
+    @State private var section = 0
+
+    private var sections: [(String, StartupCategory)] {
+        [("Launch items", .launch), ("Shell & cron", .shell), ("Browser extensions", .browser)]
+    }
+
+    private var rows: [StartupItem] {
+        s.startup.filter { $0.category == sections[section].1 }
+    }
+
+    private var fresh: [StartupItem] { s.startup.filter { $0.isNew } }
 
     var body: some View {
         Page {
             PageHeader(title: "Startup items",
-                       subtitle: "LaunchAgents and LaunchDaemons. Login Items added by apps are listed in System Settings > General > Login Items.")
+                       subtitle: "Everything that can start by itself: LaunchAgents and Daemons, shell files, cron and browser extensions. Login Items are in System Settings > General > Login Items.")
             HStack(spacing: 12) {
                 Button("Scan startup items") { monitor.scanStartup() }
                     .buttonStyle(PillStyle(kind: .ghost)).disabled(s.startupBusy)
                 if s.startupBusy { Text("Scanning…").font(.sans(14)).foregroundColor(Theme.slate) }
             }
+            if !fresh.isEmpty { newBanner }
+            HStack(spacing: 8) {
+                ForEach(0..<sections.count, id: \.self) { i in
+                    let count = s.startup.filter { $0.category == sections[i].1 }.count
+                    Button("\(sections[i].0) (\(count))") { section = i }
+                        .buttonStyle(PillStyle(kind: section == i ? .filled : .ghost))
+                }
+            }
             VStack(spacing: 0) {
-                ForEach(s.startup) { item in
+                ForEach(rows) { item in
                     StartupRow(item: item, onTrust: {
                         TrustActions.confirmAndTrust(path: item.program, name: item.label, settings: settings, state: s, monitor: monitor)
                     })
                     Divider()
                 }
-                if s.startup.isEmpty {
-                    Text(s.startupScanned ? "Nothing found." : "Press “Scan startup items”.")
+                if rows.isEmpty {
+                    Text(s.startupScanned ? "Nothing found here." : "Press “Scan startup items”.")
                         .font(.sans(15)).foregroundColor(Theme.slate).padding(20)
                 }
             }
             .artifact()
+            if section == 2 {
+                Text("Covers Chrome, Brave, Edge, Vivaldi, Opera, Arc and Firefox. Safari extensions are not listed. Extensions that can read all websites are not unsafe by themselves; MacGuard only raises the risk for known miner names.")
+                    .font(.sans(14)).foregroundColor(Theme.slate)
+            }
         }
         .onAppear { if !s.startupScanned && !s.startupBusy { monitor.scanStartup() } }
+    }
+
+    private var newBanner: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("\(fresh.count) new since your last scans").font(.sans(17, .medium)).foregroundColor(Theme.sienna)
+            ForEach(fresh.prefix(6)) { i in
+                Text("• \(i.label) · \(i.scope) · first seen \(i.firstSeen.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "recently")")
+                    .font(.sans(14)).foregroundColor(Theme.sienna)
+            }
+            Text("Items stay marked New for 7 days. If you added them yourself, nothing to do.")
+                .font(.sans(14)).foregroundColor(Theme.sienna)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.peach)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 }
 
@@ -392,16 +431,25 @@ struct StartupRow: View {
 
     private var meta: String {
         var parts = [item.scope, item.signature.rawValue]
-        if item.runAtLoad { parts.append("runs at login") }
-        if item.keepAlive { parts.append("kept alive") }
-        return parts.joined(separator: " · ")
+        if item.category == .launch {
+            if item.runAtLoad { parts.append("runs at login") }
+            if item.keepAlive { parts.append("kept alive") }
+        }
+        return parts.filter { $0 != "n/a" }.joined(separator: " · ")
     }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             RiskTag(risk: item.risk)
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.label).font(.sans(16, .medium)).foregroundColor(Theme.ink)
+                HStack(spacing: 8) {
+                    Text(item.label).font(.sans(16, .medium)).foregroundColor(Theme.ink).lineLimit(1)
+                    if item.isNew {
+                        Text("New").font(.sans(12, .medium)).foregroundColor(Theme.sienna)
+                            .padding(.horizontal, 8).padding(.vertical, 2)
+                            .background(Capsule().fill(Theme.peach))
+                    }
+                }
                 Text(meta).font(.sans(14)).foregroundColor(Theme.slate)
                 Text(item.program.isEmpty ? "(no program)" : item.program)
                     .font(.system(size: 13, design: .monospaced)).foregroundColor(Theme.slate)
@@ -417,8 +465,10 @@ struct StartupRow: View {
                 } else if item.risk != .low, !item.program.isEmpty {
                     Button("Trust") { onTrust() }.buttonStyle(PillStyle(kind: .ghost))
                 }
-                ArrowLink(title: "Show in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.id)])
+                if let p = item.revealPath {
+                    ArrowLink(title: "Show in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)])
+                    }
                 }
             }
         }
@@ -738,8 +788,11 @@ struct SettingsView: View {
             SettingRow(title: "High-risk processes",
                        detail: "Notify when a process reaches High risk (for example miner indicators).",
                        isOn: $settings.notifySuspect).disabled(!settings.alerts)
+            SettingRow(title: "New startup items",
+                       detail: "Checks every 15 minutes and notifies you when something new is added to startup, shell files, cron or browser extensions.",
+                       isOn: $settings.notifyNewStartup).disabled(!settings.alerts)
             SettingRow(title: "Automatic crypto miner check",
-                       detail: "Runs the seven miner checks every 30 minutes and notifies you if something is found.",
+                       detail: "Runs the eight miner checks every 30 minutes and notifies you if something is found.",
                        isOn: $settings.minerAutoCheck)
             HStack(spacing: 12) {
                 Button("Send test notification") {
