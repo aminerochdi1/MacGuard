@@ -2,7 +2,13 @@
 
 All notable changes to MacGuard. Newest first.
 
+## 0.8
+- **Pause and resume any process**: Pause (freezes it without losing its work) and Resume buttons on Security suspects, the Processes tab, and the apps listed on the Battery tab, next to Quit. Paused apps are resumed automatically when MacGuard quits.
+- **Disable startup items and browser extensions**: the Startup tab gets a Disable button for your own LaunchAgents and Chromium extensions (Chrome, Brave, Edge, Vivaldi, Opera, Arc). Files are moved aside, never deleted, and can be switched back on from "Disabled by MacGuard".
+- **Colored CPU and memory**: the Overview CPU and Memory (RAM) cards show a percentage colored green (low), yellow (medium) or red (high), always with the word. New "Top memory users now" list.
+
 ## 0.7
+- **Homebrew**: `brew install --cask aminerochdi1/macguard/macguard`. A cask template and `tools/release.sh` generate the cask for each release.
 - **Network tab, live and per process**: each process using the network gets its own row (with PID), updated every couple of seconds. Apps stay listed for two minutes after they go quiet (shown as idle), and a "This session" column adds up what each used since you opened the tab. Sort by busiest now or most this session.
 - **Quit from the Network tab**: right-click a row for Quit, Force Quit, Show in Finder or Copy PID, or select a row and use the buttons. Core system processes are protected.
 - **About MacGuard**: click the MacGuard title (or MacGuard > About MacGuard in the menu bar) to see who made it, with links to GitHub, issues and releases.

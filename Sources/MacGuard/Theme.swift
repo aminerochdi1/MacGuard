@@ -49,6 +49,10 @@ enum Theme {
         switch r { case .high: return high; case .medium: return mid; case .low: return low }
     }
 
+    /// Usage colors for CPU and memory: green = low use, yellow = medium, red = high (always with a number or word)
+    static func usage(_ pct: Double) -> Color { pct >= 85 ? high : (pct >= 60 ? yellow : low) }
+    static func usageLabel(_ pct: Double) -> String { pct >= 85 ? "High" : (pct >= 60 ? "Medium" : "Low") }
+
     /// Load level colors for bars and numbers
     static func load(_ pct: Double) -> Color { pct >= 85 ? high : (pct >= 60 ? mid : ink) }
 }

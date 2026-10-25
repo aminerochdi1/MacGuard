@@ -166,6 +166,10 @@ struct BatteryView: View {
                     Bar(fraction: p.cpu / mx, tint: Theme.load(p.cpu)).frame(width: 160)
                     Text(String(format: "%.0f%% CPU", p.cpu)).font(.sans(14)).monospacedDigit()
                         .foregroundColor(Theme.slate).frame(width: 90, alignment: .trailing)
+                    Button(s.paused.contains(p.id) ? "Resume" : "Pause") { ProcessActions.togglePause(pid: p.id, name: p.name, state: s) }
+                        .buttonStyle(PillStyle(kind: .ghost))
+                    Button("Quit") { ProcessActions.confirmAndTerminate(pid: p.id, name: p.name, force: false, state: s) }
+                        .buttonStyle(PillStyle(kind: .ghost))
                 }
             }
         }

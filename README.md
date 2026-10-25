@@ -19,7 +19,12 @@ Swift + SwiftUI, built with Command Line Tools only (no Xcode).
 
 ## Install
 
-Download the latest `MacGuard-x.y.z.zip` from [Releases](https://github.com/aminerochdi1/MacGuard/releases), unzip it and drag `MacGuard.app` to Applications.
+**Homebrew:**
+```bash
+brew install --cask aminerochdi1/macguard/macguard
+```
+
+**Or download:** the latest `MacGuard-x.y.z.zip` from [Releases](https://github.com/aminerochdi1/MacGuard/releases), unzip it and drag `MacGuard.app` to Applications.
 The app is not notarized by Apple, so the first time: right-click it and choose Open. If macOS still blocks it, run `xattr -dr com.apple.quarantine /Applications/MacGuard.app`.
 Prefer to build it yourself? See Build below. Apple Silicon (M1 to M4), macOS 13 or later.
 

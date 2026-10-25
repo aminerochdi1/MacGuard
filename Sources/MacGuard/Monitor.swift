@@ -19,6 +19,8 @@ final class AppState: ObservableObject {
     @Published var storage: StorageInfo?
     @Published var statusText = "MacGuard"
     @Published var notice: String?
+    @Published var paused: Set<Int32> = []
+    @Published var disabledItems: [DisabledItem] = StartupDisabler.load()
 
     @Published var startup: [StartupItem] = []
     @Published var startupScanned = false

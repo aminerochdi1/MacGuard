@@ -1,0 +1,25 @@
+cask "macguard" do
+  version "__VERSION__"
+  sha256 "__SHA256__"
+
+  url "https://github.com/aminerochdi1/MacGuard/releases/download/v#{version}/MacGuard-#{version}.zip"
+  name "MacGuard"
+  desc "Lightweight monitor for Apple Silicon: CPU, temperature, network, battery and crypto miner check"
+  homepage "https://github.com/aminerochdi1/MacGuard"
+
+  depends_on macos: ">= :ventura"
+  depends_on arch: :arm64
+
+  app "MacGuard.app"
+
+  # MacGuard is not notarized by Apple, so remove the quarantine flag to let it open without the Gatekeeper warning.
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-dr", "com.apple.quarantine", "#{appdir}/MacGuard.app"]
+  end
+
+  zap trash: [
+    "~/Library/Logs/MacGuard",
+    "~/Library/Preferences/local.macguard.app.plist",
+  ]
+end

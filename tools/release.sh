@@ -32,8 +32,13 @@ Verify the download: `shasum -a 256 -c MacGuard-VERSION.zip.sha256`
 EON
 } | sed "s/VERSION/$VERSION/" > "$NOTES_FILE"
 
+# Homebrew cask for this version (goes into the tap repo aminerochdi1/homebrew-macguard)
+SHA=$(cut -d' ' -f1 "dist/$ZIP.sha256")
+sed -e "s/__VERSION__/$VERSION/" -e "s/__SHA256__/$SHA/" homebrew/macguard.rb.template > dist/macguard.rb
+
 echo
 echo "Built: dist/$ZIP"
+echo "Cask:  dist/macguard.rb"
 echo "SHA-256: $(cut -d' ' -f1 "dist/$ZIP.sha256")"
 echo "Notes: $NOTES_FILE"
 
@@ -46,6 +51,16 @@ if [ "${1:-}" = "--publish" ]; then
     git push
     gh release create "$TAG" "dist/$ZIP" "dist/$ZIP.sha256" --title "MacGuard $VERSION" --notes-file "$NOTES_FILE"
     echo "Released $TAG"
+
+    # Update the Homebrew tap if you have it cloned: export MACGUARD_TAP_DIR=~/path/to/homebrew-macguard
+    if [ -n "${MACGUARD_TAP_DIR:-}" ] && [ -d "$MACGUARD_TAP_DIR" ]; then
+        mkdir -p "$MACGUARD_TAP_DIR/Casks"
+        cp dist/macguard.rb "$MACGUARD_TAP_DIR/Casks/macguard.rb"
+        (cd "$MACGUARD_TAP_DIR" && git add -A && git commit -m "macguard $VERSION" && git push)
+        echo "Homebrew tap updated."
+    else
+        echo "Homebrew: copy dist/macguard.rb to Casks/macguard.rb in your homebrew-macguard repo (or set MACGUARD_TAP_DIR)."
+    fi
 else
     echo "Not published. To publish: tools/release.sh --publish"
 fi

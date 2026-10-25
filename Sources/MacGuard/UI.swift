@@ -141,6 +141,9 @@ struct OverviewView: View {
             }
             HStack(alignment: .top, spacing: 16) {
                 topCPU
+                topMemory
+            }
+            HStack(alignment: .top, spacing: 16) {
                 heatCard
             }
             HStack(alignment: .top, spacing: 16) {
@@ -154,8 +157,10 @@ struct OverviewView: View {
     private var cpuCard: some View {
         let v = s.cpu?.total ?? 0
         let detail = s.cpu.map { String(format: "User %.0f%% · System %.0f%% · %d cores", $0.user, $0.system, $0.cores) } ?? "Measuring…"
+        let c = Theme.usage(v)
         return StatCard(title: "CPU", value: s.cpu == nil ? "--" : String(format: "%.0f%%", v),
-                        detail: detail, fraction: v / 100, tint: Theme.load(v))
+                        detail: s.cpu == nil ? detail : "\(Theme.usageLabel(v)) · " + detail,
+                        fraction: v / 100, tint: c, valueColor: s.cpu == nil ? nil : c)
     }
 
     private var tempCard: some View {
@@ -172,10 +177,13 @@ struct OverviewView: View {
 
     private var memCard: some View {
         guard let m = s.mem else { return StatCard(title: "Memory", value: "--", detail: "Measuring…") }
-        let tint: Color = m.pressure == .critical ? Theme.high : (m.pressure == .warning ? Theme.mid : Theme.ink)
-        return StatCard(title: "Memory", value: "\(fmtBytes(m.used)) / \(fmtBytes(m.total))",
-                        detail: "Pressure: \(m.pressure.rawValue) · Swap \(fmtBytes(m.swapUsed))",
-                        fraction: Double(m.used) / Double(max(m.total, 1)), tint: tint)
+        let frac = Double(m.used) / Double(max(m.total, 1))
+        var pct = frac * 100
+        if m.pressure == .critical { pct = max(pct, 85) } else if m.pressure == .warning { pct = max(pct, 60) }
+        let tint = Theme.usage(pct)
+        return StatCard(title: "Memory (RAM)", value: String(format: "%.0f%%", frac * 100),
+                        detail: "\(Theme.usageLabel(pct)) · \(fmtBytes(m.used)) of \(fmtBytes(m.total)) · pressure \(m.pressure.rawValue) · swap \(fmtBytes(m.swapUsed))",
+                        fraction: frac, tint: tint, valueColor: tint)
     }
 
     private var diskCard: some View {
@@ -211,9 +219,32 @@ struct OverviewView: View {
                     Text(p.name).font(.sans(15)).lineLimit(1)
                     Spacer()
                     Text(String(format: "%.0f%%", p.cpu)).font(.sans(15)).monospacedDigit()
-                        .foregroundColor(Theme.load(p.cpu)).frame(width: 60, alignment: .trailing)
+                        .foregroundColor(Theme.usage(p.cpu)).frame(width: 60, alignment: .trailing)
                     Text(fmtBytes(p.footprint)).font(.sans(14)).monospacedDigit()
                         .foregroundColor(Theme.slate).frame(width: 90, alignment: .trailing)
+                }
+                .foregroundColor(Theme.ink)
+            }
+            if s.procs.isEmpty { Text("Collecting data…").font(.sans(15)).foregroundColor(Theme.slate) }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .artifact()
+    }
+
+    private var topMemory: some View {
+        let total = Double(max(s.mem?.total ?? 1, 1))
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Top memory users now").font(.sans(17, .medium)).foregroundColor(Theme.ink)
+            ForEach(s.procs.sorted { $0.footprint > $1.footprint }.prefix(5)) { p in
+                let pct = Double(p.footprint) / total * 100
+                HStack {
+                    Text(p.name).font(.sans(15)).lineLimit(1)
+                    Spacer()
+                    Text(String(format: "%.1f%%", pct)).font(.sans(14)).monospacedDigit()
+                        .foregroundColor(Theme.slate).frame(width: 60, alignment: .trailing)
+                    Text(fmtBytes(p.footprint)).font(.sans(15)).monospacedDigit()
+                        .foregroundColor(Theme.usage(pct * 4)).frame(width: 90, alignment: .trailing)
                 }
                 .foregroundColor(Theme.ink)
             }
@@ -302,6 +333,8 @@ struct ProcessesView: View {
             Spacer()
             if let p = selectedProc {
                 Text("\(p.name) selected").font(.sans(14)).foregroundColor(Theme.slate)
+                Button(s.paused.contains(p.id) ? "Resume" : "Pause") { ProcessActions.togglePause(pid: p.id, name: p.name, state: s) }
+                    .buttonStyle(PillStyle(kind: .ghost))
                 Button("Quit") { quit(p, force: false) }.buttonStyle(PillStyle(kind: .ghost))
                 Button("Force quit") { quit(p, force: true) }.buttonStyle(PillStyle(kind: .filled))
             }
@@ -324,7 +357,11 @@ struct ProcessesView: View {
 
     private func row(_ p: ProcInfo) -> some View {
         HStack {
-            Text(p.name).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 8) {
+                Text(p.name).lineLimit(1)
+                if s.paused.contains(p.id) { Text("paused").font(.sans(12)).foregroundColor(Theme.mid) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             Text("\(p.id)").monospacedDigit().frame(width: 70, alignment: .trailing).foregroundColor(Theme.slate)
             Text(String(format: "%.1f%%", p.cpu)).monospacedDigit().frame(width: 80, alignment: .trailing)
                 .foregroundColor(Theme.load(p.cpu))
@@ -339,6 +376,9 @@ struct ProcessesView: View {
         .contentShape(Rectangle())
         .onTapGesture { selected = p.id }
         .contextMenu {
+            Button(s.paused.contains(p.id) ? "Resume “\(p.name)”" : "Pause “\(p.name)”") {
+                ProcessActions.togglePause(pid: p.id, name: p.name, state: s)
+            }
             Button("Quit “\(p.name)”") { quit(p, force: false) }
             Button("Force Quit “\(p.name)”") { quit(p, force: true) }
             Divider()
@@ -391,12 +431,17 @@ struct StartupView: View {
                     Button("\(sections[i].0) (\(count))") { section = i }
                         .buttonStyle(PillStyle(kind: section == i ? .filled : .ghost))
                 }
+                Button("Disabled by MacGuard (\(s.disabledItems.count))") { section = 3 }
+                    .buttonStyle(PillStyle(kind: section == 3 ? .filled : .ghost))
             }
+            if section == 3 { disabledList } else {
             VStack(spacing: 0) {
                 ForEach(rows) { item in
                     StartupRow(item: item, onTrust: {
                         TrustActions.confirmAndTrust(path: item.program, name: item.label, settings: settings, state: s, monitor: monitor)
-                    })
+                    }, onDisable: StartupDisabler.canDisable(item) ? {
+                        StartupDisabler.disable(item, state: s, monitor: monitor)
+                    } : nil)
                     Divider()
                 }
                 if rows.isEmpty {
@@ -405,12 +450,39 @@ struct StartupView: View {
                 }
             }
             .artifact()
+            }
             if section == 2 {
                 Text("Covers Chrome, Brave, Edge, Vivaldi, Opera, Arc and Firefox. Safari extensions are not listed. Extensions that can read all websites are not unsafe by themselves; MacGuard only raises the risk for known miner names.")
                     .font(.sans(14)).foregroundColor(Theme.slate)
             }
         }
         .onAppear { if !s.startupScanned && !s.startupBusy { monitor.scanStartup() } }
+    }
+
+    private var disabledList: some View {
+        VStack(spacing: 0) {
+            ForEach(s.disabledItems) { d in
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(d.label).font(.sans(16, .medium)).foregroundColor(Theme.ink).lineLimit(1)
+                        Text("\(d.scope) · disabled \(d.date.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.sans(14)).foregroundColor(Theme.slate)
+                        Text(d.original).font(.system(size: 13, design: .monospaced)).foregroundColor(Theme.slate)
+                            .lineLimit(1).truncationMode(.middle)
+                    }
+                    Spacer()
+                    Button("Re-enable") { StartupDisabler.enable(d, state: s, monitor: monitor) }
+                        .buttonStyle(PillStyle(kind: .ghost))
+                }
+                .padding(.horizontal, 20).padding(.vertical, 12)
+                Divider()
+            }
+            if s.disabledItems.isEmpty {
+                Text("Nothing disabled. Use Disable on a launch item or browser extension; it can be switched back on here.")
+                    .font(.sans(15)).foregroundColor(Theme.slate).padding(20)
+            }
+        }
+        .artifact()
     }
 
     private var newBanner: some View {
@@ -433,6 +505,7 @@ struct StartupView: View {
 struct StartupRow: View {
     let item: StartupItem
     let onTrust: () -> Void
+    var onDisable: (() -> Void)? = nil
 
     private var meta: String {
         var parts = [item.scope, item.signature.rawValue]
@@ -469,6 +542,9 @@ struct StartupRow: View {
                     Text("Trusted").font(.sans(14, .medium)).foregroundColor(Theme.low)
                 } else if item.risk != .low, !item.program.isEmpty {
                     Button("Trust") { onTrust() }.buttonStyle(PillStyle(kind: .ghost))
+                }
+                if let d = onDisable {
+                    Button("Disable") { d() }.buttonStyle(PillStyle(kind: .ghost))
                 }
                 if let p = item.revealPath {
                     ArrowLink(title: "Show in Finder") {
@@ -565,6 +641,8 @@ struct SuspectRow: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 6) {
+                Button(s.paused.contains(x.id) ? "Resume" : "Pause") { ProcessActions.togglePause(pid: x.id, name: x.name, state: s) }
+                    .buttonStyle(PillStyle(kind: .ghost))
                 Button("Quit") { ProcessActions.confirmAndTerminate(pid: x.id, name: x.name, force: false, state: s) }
                     .buttonStyle(PillStyle(kind: .ghost))
                 if !x.path.isEmpty {
@@ -579,6 +657,9 @@ struct SuspectRow: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .contextMenu {
+            Button(s.paused.contains(x.id) ? "Resume “\(x.name)”" : "Pause “\(x.name)”") {
+                ProcessActions.togglePause(pid: x.id, name: x.name, state: s)
+            }
             Button("Quit “\(x.name)”") { ProcessActions.confirmAndTerminate(pid: x.id, name: x.name, force: false, state: s) }
             Button("Force Quit “\(x.name)”") { ProcessActions.confirmAndTerminate(pid: x.id, name: x.name, force: true, state: s) }
             if !x.path.isEmpty {
