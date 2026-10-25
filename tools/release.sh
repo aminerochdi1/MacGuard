@@ -1,6 +1,7 @@
 #!/bin/bash
 # Usage: tools/release.sh            -> build and zip the app into dist/
 #        tools/release.sh --publish  -> also create a GitHub release for the current version (needs `gh auth login`)
+#        tools/release.sh --publish --prerelease  -> same, marked "Pre-release" on GitHub
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -42,6 +43,9 @@ echo "Cask:  dist/macguard.rb"
 echo "SHA-256: $(cut -d' ' -f1 "dist/$ZIP.sha256")"
 echo "Notes: $NOTES_FILE"
 
+PRE=""
+[ "${2:-}" = "--prerelease" ] && PRE="--prerelease"
+
 if [ "${1:-}" = "--publish" ]; then
     command -v gh >/dev/null || { echo "gh (GitHub CLI) not found: brew install gh && gh auth login"; exit 1; }
     if [ -n "$(git status --porcelain)" ]; then
@@ -49,7 +53,7 @@ if [ "${1:-}" = "--publish" ]; then
         exit 1
     fi
     git push
-    gh release create "$TAG" "dist/$ZIP" "dist/$ZIP.sha256" --title "MacGuard $VERSION" --notes-file "$NOTES_FILE"
+    gh release create "$TAG" "dist/$ZIP" "dist/$ZIP.sha256" --title "MacGuard $VERSION" --notes-file "$NOTES_FILE" $PRE
     echo "Released $TAG"
 
     # Update the Homebrew tap if you have it cloned: export MACGUARD_TAP_DIR=~/path/to/homebrew-macguard
