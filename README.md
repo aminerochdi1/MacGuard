@@ -113,6 +113,8 @@ Good first ideas are listed under the `wanted feature` label in Issues.
 
 MacGuard was inspired by [KnockKnock](https://github.com/objective-see/KnockKnock) from Objective-See (GPL-3.0), which taught me which places malware uses to stay on a Mac: launch items, shell files, cron, browser extensions, library injection and the notarization check. MacGuard is written independently in Swift and does not contain KnockKnock's code. For deep persistence scanning with VirusTotal lookups, use KnockKnock itself, and check out Objective-See's other free tools (BlockBlock, LuLu).
 
+The Homebrew install exists thanks to u/Historical-Most-748 (Imperador da Guanabara) on Reddit's [r/macgaming](https://www.reddit.com/r/macgaming/), who suggested it. Thank you!
+
 ## Speed: storage checks
 Storage checks are close to instant in everyday use, noticeably faster than the native macOS storage screen, which can take a long time to calculate and index folders. In hands-on testing on an M2 MacBook (not a formal benchmark) the disk-free figure and the cleanup scan came back almost immediately.
 
