@@ -19,10 +19,18 @@ Swift + SwiftUI, built with Command Line Tools only (no Xcode).
 
 ## Install
 
-**Homebrew:**
+**Homebrew (easiest):**
 ```bash
 brew install --cask aminerochdi1/macguard/macguard
 ```
+
+> **New to Homebrew?** [Homebrew](https://brew.sh) is a free package manager for macOS: one command installs, updates and removes apps, so you don't have to download and drag them yourself.
+> Install it once by pasting this in Terminal (it asks for your Mac password and takes a few minutes):
+> ```bash
+> /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+> ```
+> Follow the "Next steps" it prints at the end, then run the `brew install` command above.
+> Later: update MacGuard with `brew upgrade --cask macguard`, remove it with `brew uninstall --cask macguard`.
 
 **Or download:** the latest `MacGuard-x.y.z.zip` from [Releases](https://github.com/aminerochdi1/MacGuard/releases), unzip it and drag `MacGuard.app` to Applications.
 The app is not notarized by Apple, so the first time: right-click it and choose Open. If macOS still blocks it, run `xattr -dr com.apple.quarantine /Applications/MacGuard.app`.

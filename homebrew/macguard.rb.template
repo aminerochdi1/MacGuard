@@ -7,7 +7,7 @@ cask "macguard" do
   desc "Lightweight monitor for Apple Silicon: CPU, temperature, network, battery and crypto miner check"
   homepage "https://github.com/aminerochdi1/MacGuard"
 
-  depends_on macos: ">= :ventura"
+  depends_on macos: :ventura
   depends_on arch: :arm64
 
   app "MacGuard.app"
